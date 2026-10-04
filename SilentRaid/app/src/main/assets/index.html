@@ -1,0 +1,342 @@
+<!doctype html>
+<!--
+  SILENT RAID — open web source extracted from app-debug.apk.
+  Entry point: loads the visual system (style.css) and all gameplay/UI logic
+  (script.js). Asset paths are relative to this file in ./assets/.
+-->
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <meta name="theme-color" content="#000000" />
+  <title>PC Review — SILENT RAID — المداهمة الصامتة</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Changa:wght@400;600;700;800&family=Alexandria:wght@400;500;600;700;800;900&family=Readex+Pro:wght@400;500;600;700&family=Cairo:wght@400;600;700;800;900&family=Russo+One&family=Share+Tech+Mono&display=swap" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Changa:wght@400;600;700;800&family=Alexandria:wght@400;500;600;700;800;900&family=Readex+Pro:wght@400;500;600;700&family=Cairo:wght@400;600;700;800;900&family=Russo+One&family=Share+Tech+Mono&display=swap"></noscript>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main id="app" class="app-shell" aria-label="SILENT RAID — المداهمة الصامتة">
+    <section id="menuScreen" class="screen active heist-menu">
+      <div class="menu-backdrop" aria-hidden="true">
+        <div class="cartoon-city-art"></div>
+        <div class="hero-scrim"></div>
+        <div class="hero-grain"></div>
+        <div class="scan-beam beam-a"></div>
+        <div class="scan-beam beam-b"></div>
+        <div class="police-beacon"></div>
+        <div class="truck-lights-rig">
+          <div class="van-lightbar">
+            <div class="van-beacon van-beacon-red">
+              <span class="beacon-core"></span>
+              <span class="beacon-halo"></span>
+              <span class="beacon-wash"></span>
+            </div>
+            <div class="van-beacon van-beacon-center">
+              <span class="beacon-core"></span>
+            </div>
+            <div class="van-beacon van-beacon-blue">
+              <span class="beacon-core"></span>
+              <span class="beacon-halo"></span>
+              <span class="beacon-wash"></span>
+            </div>
+          </div>
+          <div class="van-headlights">
+            <div class="van-headlight headlight-front">
+              <span class="headlight-bulb"></span>
+              <span class="headlight-glow"></span>
+              <span class="headlight-beam"></span>
+            </div>
+          </div>
+        </div>
+        <div class="heist-vignette"></div>
+      </div>
+      <div class="menu-topbar">
+        <div class="menu-clock"><span class="clock-dot"></span><span>الفرع تحت المراقبة</span></div>
+        <div class="brand-chip"><span>OPERATION 07</span><span style="color:rgba(255,255,255,.3);padding:0 4px">|</span><span class="brand-mark">SR</span></div>
+      </div>
+      <div class="heist-title-lockup" aria-label="SILENT RAID">
+        <div class="english-game-logo"><span>SILENT</span><b>RAID</b></div>
+        <div class="arabic-title-sub"><span class="title-dash">——</span><span>المداهمة الصامتة</span><span class="title-dash">——</span></div>
+      </div>
+      <div class="heist-menu-panel">
+        <button id="startBtn" class="primary-btn heist-primary"><span>ابدأ المداهمة</span><span class="start-chevron">›</span></button>
+        <div class="menu-sub-actions">
+          <button id="settingsBtn" class="secondary-btn heist-secondary settings-menu-btn"><span class="btn-icon">⚙</span><span>الإعدادات</span></button>
+          <button id="howBtn" class="secondary-btn heist-secondary"><span class="btn-icon">?</span><span>طريقة اللعب</span></button>
+        </div>
+      </div>
+      <div class="menu-bottom-bar">
+        <div class="menu-credit">BY / MOSTAFA HAMMAD</div>
+        <button id="musicToggleBtn" class="music-toggle" type="button" aria-pressed="false" aria-label="إيقاف الموسيقى"><span class="music-label">إيقاف الموسيقى</span><span class="music-icon">🔈</span></button>
+      </div>
+      <div id="controlSetupPanel" class="control-setup-panel glass-panel hidden" role="dialog" aria-modal="true" aria-labelledby="controlSetupTitle">
+        <div class="settings-head">
+          <div>
+            <div class="settings-kicker">تحكم الهاتف</div>
+            <h2 id="controlSetupTitle">اختر مكان أدوات التحكم</h2>
+          </div>
+          <button id="closeControlSetup" class="icon-btn" aria-label="إغلاق">×</button>
+        </div>
+        <p class="setup-lead">اختر مكان أدوات التحكم عند الحاجة. الأنالوج الثابت يعمل افتراضيًا ويمكن تغييره من الإعدادات.</p>
+        <div class="control-choice-grid">
+          <button class="control-choice" data-layout="analog-right" type="button">
+            <div class="control-choice-title">🕹️ الأنالوج يمين</div>
+            <svg class="control-diagram" viewBox="0 0 260 150" role="img" aria-label="الأنالوج على اليمين والأزرار على اليسار">
+              <rect x="35" y="8" width="190" height="134" rx="20" class="phone-outline"/>
+              <circle cx="178" cy="106" r="25" class="diagram-stick"/><circle cx="178" cy="106" r="10" class="diagram-stick-core"/>
+              <rect x="55" y="100" width="52" height="16" rx="8" class="diagram-button"/><rect x="55" y="121" width="52" height="12" rx="6" class="diagram-button small"/>
+            </svg>
+            <span>الأزرار يسار • الأنالوج يمين</span>
+          </button>
+          <button class="control-choice" data-layout="analog-left" type="button">
+            <div class="control-choice-title">🕹️ الأنالوج يسار</div>
+            <svg class="control-diagram" viewBox="0 0 260 150" role="img" aria-label="الأنالوج على اليسار والأزرار على اليمين">
+              <rect x="35" y="8" width="190" height="134" rx="20" class="phone-outline"/>
+              <circle cx="82" cy="106" r="25" class="diagram-stick"/><circle cx="82" cy="106" r="10" class="diagram-stick-core"/>
+              <rect x="153" y="100" width="52" height="16" rx="8" class="diagram-button"/><rect x="153" y="121" width="52" height="12" rx="6" class="diagram-button small"/>
+            </svg>
+            <span>الأنالوج يسار • الأزرار يمين</span>
+          </button>
+        </div>
+        <p class="setup-save-note">سيتم حفظ التعديل ويمكنك تغييره من الإعدادات.</p>
+      </div>
+      <div id="settingsPanel" class="settings-panel glass-panel hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+        <div class="settings-head">
+          <div>
+            <div class="settings-kicker">إعدادات اللعبة</div>
+            <h2 id="settingsTitle">الإعدادات</h2>
+          </div>
+          <button id="closeSettings" class="icon-btn" aria-label="إغلاق">×</button>
+        </div>
+        <div class="settings-section">
+          <h3>🎮 تخطيط التحكم</h3>
+          <div class="control-choice-grid settings-choice-grid">
+            <button class="control-choice" data-layout="analog-right" type="button">
+              <div class="control-choice-title">الأنالوج يمين</div>
+              <svg class="control-diagram" viewBox="0 0 260 150" aria-hidden="true"><rect x="35" y="8" width="190" height="134" rx="20" class="phone-outline"/><circle cx="178" cy="106" r="25" class="diagram-stick"/><circle cx="178" cy="106" r="10" class="diagram-stick-core"/><rect x="55" y="100" width="52" height="16" rx="8" class="diagram-button"/><rect x="55" y="121" width="52" height="12" rx="6" class="diagram-button small"/></svg>
+            </button>
+            <button class="control-choice" data-layout="analog-left" type="button">
+              <div class="control-choice-title">الأنالوج يسار</div>
+              <svg class="control-diagram" viewBox="0 0 260 150" aria-hidden="true"><rect x="35" y="8" width="190" height="134" rx="20" class="phone-outline"/><circle cx="82" cy="106" r="25" class="diagram-stick"/><circle cx="82" cy="106" r="10" class="diagram-stick-core"/><rect x="153" y="100" width="52" height="16" rx="8" class="diagram-button"/><rect x="153" y="121" width="52" height="12" rx="6" class="diagram-button small"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="settings-section settings-feature-section">
+          <h3>🕹️ الأنالوج</h3>
+          <label class="setting-check-row" for="floatingJoystickToggle">
+            <input id="floatingJoystickToggle" type="checkbox" />
+            <span class="setting-check-box" aria-hidden="true"></span>
+            <span class="setting-check-text"><strong>الأنالوج المتحرك</strong></span>
+          </label>
+        </div>
+        <div class="settings-section">
+          <h3>🎵 الموسيقى</h3>
+          <button id="settingsMusicToggle" class="settings-toggle" type="button" aria-pressed="false">🎵 إيقاف الموسيقى</button>
+          <p class="settings-note">عند الإيقاف تتوقف موسيقى الخلفية وموسيقى الفوز والخسارة فقط، بينما تبقى المؤثرات الصوتية.</p>
+        </div>
+      </div>
+      <div id="howPanel" class="how-panel glass-panel hidden" role="dialog" aria-modal="true" aria-labelledby="howTitle">
+        <div class="panel-head"><h2 id="howTitle">طريقة اللعب</h2><button id="closeHow" class="icon-btn" aria-label="إغلاق">×</button></div>
+        <div class="how-grid">
+          <div class="how-section"><h3>🎯 الهدف</h3><p>اجمع المفاتيح الـ 3 واهرب قبل نفاد الوقت.</p></div>
+          <div class="how-section"><h3>🕹️ التحكم</h3><p>عصا الحركة للهاتف، والأسهم أو WASD للكمبيوتر.</p></div>
+          <div class="how-section"><h3>👁️ التخفي والرؤية</h3><p>الحركة توسّع مجال الرؤية، بينما الوقوف يضيّق دائرة الرؤية سريعًا إلى أن تنعدم.</p></div>
+          <div class="how-section"><h3>🚨 الحراس والكاميرات</h3><p>تجنب رصد الحراس وكاميرات المراقبة لمنع الإنذار والمطاردة.</p></div>
+        </div>
+      </div>
+    </section>
+    <section id="levelSelectScreen" class="screen level-select-screen" aria-label="اختيار المرحلة والدور">
+      <!-- Clean Fullscreen Cinematic Background with Ambient Overlays -->
+      <div class="stage-bg-layer" id="stageBgLayer">
+        <img id="stageBoardImg" class="stage-bg-clean-img" src="assets/stage-bg-clean-1.jpg" alt="خلفية المرحلة" draggable="false" />
+        <div class="stage-ambient-overlay" id="stageAmbientOverlay"></div>
+        <div class="stage-particles-overlay" id="stageParticlesOverlay"></div>
+      </div>
+
+      <div class="stage-board-container" id="stageBoardContainer">
+        <!-- Top Bar: Golden Back Button (Image 5) on left, Operation Badge on right -->
+        <header class="stage-top-bar">
+          <button id="levelsBackBtn" class="stage-gold-back-btn hotspot-back" type="button" aria-label="العودة للقائمة الرئيسية">
+            <span class="btn-text">عودة</span>
+            <span class="btn-arrow">⬅</span>
+          </button>
+          <div class="stage-op-badge">
+            <span class="badge-pulse-dot"></span>
+            <span class="badge-text" id="stageOpBadgeText">العملية ٠١</span>
+          </div>
+        </header>
+
+        <!-- Stage Title & Mission info in Center Upper Third -->
+        <div class="stage-header-info">
+          <div class="stage-emblem-wrap">
+            <span class="stage-emblem" id="stageEmblemIcon">🛡️</span>
+          </div>
+          <h1 class="stage-title" id="stageTitleText">المرحلة البرونزية</h1>
+        </div>
+
+        <!-- 7 Round Cards Carousel Row with Navigation Arrows -->
+        <div class="stage-carousel-wrapper">
+          <button id="lsPrevBtn" class="stage-nav-arrow arrow-left hotspot-arrow hotspot-prev" type="button" aria-label="المرحلة السابقة">❮</button>
+
+          <div class="stage-cards-track" id="stageCardsTrack">
+            <!-- 7 Round Cards (Rounds 1 to 7) matching Image 3 reference -->
+            <button class="stage-round-card hotspot-card" data-round="1" type="button" aria-label="الدور 1">
+              <div class="card-ribbon-number">01</div>
+              <div class="card-plaque">
+                <span class="card-round-label">الدور 1</span>
+              </div>
+              <div class="card-ribbon-status">
+                <span>مفتوح</span>
+              </div>
+            </button>
+
+            <button class="stage-round-card hotspot-card" data-round="2" type="button" aria-label="الدور 2">
+              <div class="card-ribbon-number">02</div>
+              <div class="card-plaque">
+                <span class="card-round-label">الدور 2</span>
+              </div>
+              <div class="card-ribbon-status">
+                <span>مفتوح</span>
+              </div>
+            </button>
+
+            <button class="stage-round-card hotspot-card" data-round="3" type="button" aria-label="الدور 3">
+              <div class="card-ribbon-number">03</div>
+              <div class="card-plaque">
+                <span class="card-round-label">الدور 3</span>
+              </div>
+              <div class="card-ribbon-status">
+                <span>مفتوح</span>
+              </div>
+            </button>
+
+            <button class="stage-round-card hotspot-card" data-round="4" type="button" aria-label="الدور 4">
+              <div class="card-ribbon-number">04</div>
+              <div class="card-plaque">
+                <span class="card-round-label">الدور 4</span>
+              </div>
+              <div class="card-ribbon-status">
+                <span>مفتوح</span>
+              </div>
+            </button>
+
+            <button class="stage-round-card hotspot-card" data-round="5" type="button" aria-label="الدور 5">
+              <div class="card-ribbon-number">05</div>
+              <div class="card-plaque">
+                <span class="card-round-label">الدور 5</span>
+              </div>
+              <div class="card-ribbon-status">
+                <span>مفتوح</span>
+              </div>
+            </button>
+
+            <button class="stage-round-card hotspot-card" data-round="6" type="button" aria-label="الدور 6">
+              <div class="card-ribbon-number">06</div>
+              <div class="card-plaque">
+                <span class="card-round-label">الدور 6</span>
+              </div>
+              <div class="card-ribbon-status">
+                <span>مفتوح</span>
+              </div>
+            </button>
+
+            <button class="stage-round-card hotspot-card" data-round="7" type="button" aria-label="الدور 7">
+              <div class="card-ribbon-number">07</div>
+              <div class="card-plaque">
+                <span class="card-round-label">الدور 7</span>
+              </div>
+              <div class="card-ribbon-status">
+                <span>مفتوح</span>
+              </div>
+            </button>
+          </div>
+
+          <button id="lsNextBtn" class="stage-nav-arrow arrow-right hotspot-arrow hotspot-next" type="button" aria-label="المرحلة التالية">❯</button>
+        </div>
+
+        <!-- Fixed Bottom Navigation Bar (Image 2 & 4: Fixed sleek dark capsule with 5 stage dots) -->
+        <footer class="stage-fixed-bottom-bar" aria-label="شريط تنقل المراحل">
+          <div class="stage-nav-capsule" id="lsDotsRow">
+            <button class="stage-dot-btn hotspot-dot active" data-stage="1" type="button" aria-label="المرحلة 1 البرونزية"></button>
+            <button class="stage-dot-btn hotspot-dot" data-stage="2" type="button" aria-label="المرحلة 2 الفضية"></button>
+            <button class="stage-dot-btn hotspot-dot" data-stage="3" type="button" aria-label="المرحلة 3 الذهبية"></button>
+            <button class="stage-dot-btn hotspot-dot" data-stage="4" type="button" aria-label="المرحلة 4 الألماسية"></button>
+            <button class="stage-dot-btn hotspot-dot" data-stage="5" type="button" aria-label="المرحلة 5 الأسطورية"></button>
+          </div>
+        </footer>
+      </div>
+    </section>
+
+    <section id="gameScreen" class="screen">
+      <div id="gameWrap" class="game-wrap">
+                <canvas id="gameCanvas" width="800" height="600" aria-label="ملعب المداهمة"></canvas>
+        <div class="hud" aria-live="polite">
+          <div id="levelHud">المرحلة 1 - الدور 1</div>
+          <div id="timerHud">الوقت المتبقي: 00:00</div>
+          <div id="keysHud" class="keys-hud" aria-label="المفاتيح 0 من 3">المفاتيح: 0/3</div>
+          <div id="chaseHud" class="chase-hud" hidden>⚠ المطاردة نشطة</div>
+        </div>
+        <div class="corner-tools">
+          <button id="levelsBtn" class="tool-btn levels-hud-btn" title="اختيار دور آخر" aria-label="العودة للأدوار">
+            <span class="btn-icon">🗺️</span>
+            <span>الأدوار</span>
+          </button>
+        </div>
+        <div id="messageHud" class="message-hud"></div>
+        <div id="joystick" class="joystick" aria-label="عصا الحركة"><div id="joystickKnob"></div></div>
+      </div>
+    </section>
+
+    <section id="successScreen" class="screen result-screen" aria-hidden="true">
+      <canvas id="successRainCanvas" class="result-rain-canvas" aria-hidden="true"></canvas>
+      <div class="result-panel glass-panel">
+        <div class="result-glyph success money-bag-glyph" aria-hidden="true">
+          <svg viewBox="0 0 120 120" role="img" aria-label="كيس المال">
+            <path class="bag-strap" d="M39 40c3-18 11-27 21-27s19 9 21 27"/>
+            <path class="bag-neck" d="M39 39c12 5 30 5 42 0l-5 15c-10 7-22 7-32 0z"/>
+            <path class="bag-body" d="M28 48c8-7 56-7 64 0l8 39c-6 19-74 19-80 0z"/>
+            <path class="bag-top" d="M34 49c16 9 36 9 52 0"/>
+            <path class="bag-tie" d="M50 48l-4 11m24-11l4 11M54 54c4 3 8 3 12 0"/>
+            <circle class="bag-coin" cx="60" cy="73" r="14"/>
+            <path class="bag-dollar" d="M60 63v20m7-14c-3-5-14-5-14 1 0 7 14 3 14 10 0 7-12 8-15 1"/>
+            <circle class="bag-coin mini" cx="37" cy="72" r="4.2"/>
+            <circle class="bag-coin mini" cx="83" cy="72" r="4.2"/>
+          </svg>
+        </div>
+        <h2>تمت المداهمة!</h2>
+        <p>تم فتح الخزنة وتأمين المال بنجاح.</p>
+        <div class="result-actions">
+          <button id="nextBtn" class="primary-btn">الدور التالي</button>
+          <button id="successLevelsBtn" class="secondary-btn">العودة للأدوار</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="failureScreen" class="screen result-screen failure-result" aria-hidden="true">
+      <canvas id="failureRainCanvas" class="result-rain-canvas" aria-hidden="true"></canvas>
+      <div class="result-panel glass-panel">
+        <div class="result-glyph failure prison-glyph" aria-hidden="true">
+          <svg viewBox="0 0 120 120" role="img" aria-label="سجن">
+            <rect x="18" y="18" width="84" height="84" rx="10" class="prison-frame"/>
+            <path class="prison-bars" d="M34 18v84M49 18v84M64 18v84M79 18v84"/>
+            <rect x="83" y="42" width="11" height="15" rx="2" class="prison-lock"/>
+          </svg>
+        </div>
+        <h2>انتهت اللعبة!</h2>
+        <p>أحاط بك الأمن وأُغلقت العملية.</p>
+        <div class="result-actions">
+          <button id="rewardContinueBtn" class="secondary-btn" type="button">شاهد إعلانًا واحصل على +25 ثانية</button>
+          <button id="retryBtn" class="secondary-btn">↩ إعادة المحاولة</button>
+          <button id="failureLevelsBtn" class="secondary-btn">🗺 الأدوار</button>
+        </div>
+      </div>
+    </section>
+  </main>
+  <link rel="preload" as="audio" href="assets/main-title.mp3" type="audio/mpeg">
+  <audio id="mainTitleAudio" src="assets/main-title.mp3" preload="auto" playsinline></audio>
+  <script defer src="script.js"></script>
+
+</body>
+</html>
