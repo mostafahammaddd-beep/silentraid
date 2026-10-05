@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SILENT RAID</string>
+    <!-- AdMob TEST ids published by Google. Replace both with your own before release. -->
+    <string name="admob_app_id" translatable="false">ca-app-pub-3940256099942544~3347511713</string>
+    <string name="admob_rewarded_unit_id" translatable="false">ca-app-pub-3940256099942544/5224354917</string>
+    <string name="exit_title">SILENT RAID</string>
+    <string name="exit_message">هل تريد الخروج من اللعبة؟</string>
+    <string name="exit_yes">خروج</string>
+    <string name="exit_no">متابعة اللعب</string>
+</resources>

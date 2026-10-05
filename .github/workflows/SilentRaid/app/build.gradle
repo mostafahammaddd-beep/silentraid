@@ -1,0 +1,40 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.silentraid.game'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.silentraid.game'
+        minSdk 24
+        targetSdk 34
+        versionCode 11
+        versionName '1.0.10'
+    }
+
+    signingConfigs {
+        release {
+            storeFile file('../keystore.p12')
+            storeType 'pkcs12'
+            storePassword 'silentraid'
+            keyAlias 'silentraid'
+            keyPassword 'silentraid'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    lint { abortOnError false; checkReleaseBuilds false }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
+
+dependencies {
+    implementation 'com.google.android.gms:play-services-ads:25.4.0'
+    implementation 'androidx.annotation:annotation:1.8.0'
+}
