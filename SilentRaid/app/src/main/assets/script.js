@@ -2142,6 +2142,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     else if(status==='offline')btn.textContent='لا يوجد اتصال بالإنترنت — الإعلان يحتاج إنترنت';
     else if(status==='consent_required')btn.textContent='يلزم إعداد الموافقة في AdMob';
     else if(status==='not_ready')btn.textContent='الإعلان غير جاهز، حاول بعد لحظات';
+    else if(status.indexOf('engine_failed')===0){const q=status.split(':');btn.textContent='تعذر تشغيل محرك الإعلان — WebView: '+(q[1]||'?').replace(/_/g,' ').trim()+' | Android '+(q[2]||'?')+' | '+(q[3]||'').replace(/_/g,' ').trim();}
     else if(status.indexOf('load_failed')===0){const q=status.split(':');btn.textContent='تعذر تحميل الإعلان (خطأ '+(q[1]||'?')+(q[2]?' - '+q[2].replace(/_/g,' ').trim():'')+')';}
     else btn.textContent='تعذر عرض الإعلان — حاول مجددًا';
   };

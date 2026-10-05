@@ -4,10 +4,12 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
+import android.content.pm.PackageInfo;
 import android.graphics.Color;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -97,9 +99,6 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         super.onCreate(savedInstanceState);
-        // Start the AdMob SDK before the heavy game WebView is built so its own
-        // initialisation does not compete with the game's asset loading.
-        startAds();
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
@@ -155,6 +154,13 @@ public class MainActivity extends Activity {
         applyImmersiveSticky();
 
         mWebView.loadUrl("file:///android_asset/index.html");
+
+        // AdMob renders/serves ads through an Android WebView of its own ("JavascriptEngine").
+        // Start the SDK only AFTER the game's WebView has been created on the main thread, so the
+        // system WebView provider is already loaded and running on the UI thread when the SDK
+        // first needs it (the SDK itself still initialises on a background thread, as Google advises).
+        startAds();
+        Log.i(TAG, "env " + environmentSummary());
     }
 
     @Override
@@ -281,6 +287,42 @@ public class MainActivity extends Activity {
         mHandler.postDelayed(initFallback, INIT_FALLBACK_MS);
     }
 
+    // ------------------------------------------------------------------ diagnostics
+
+    /** "package version" of the WebView provider the system is using right now, or a marker. */
+    private String webViewVersion() {
+        try {
+            if (Build.VERSION.SDK_INT >= 26) {
+                PackageInfo pi = WebView.getCurrentWebViewPackage();
+                if (pi == null) return "none";
+                return pi.packageName + " " + (pi.versionName == null ? "?" : pi.versionName);
+            }
+        } catch (Throwable ignored) { }
+        return "legacy";
+    }
+
+    private String environmentSummary() {
+        return "android=" + Build.VERSION.RELEASE + "/" + Build.VERSION.SDK_INT
+                + " device=" + Build.MANUFACTURER + " " + Build.MODEL
+                + " webview=" + webViewVersion();
+    }
+
+    /** Page-safe token: letters/digits/'-' only (dots become '-', anything else '_'). */
+    private static String token(String v) {
+        if (v == null) return "";
+        String t = v.replace("com.google.android.", "").replace('.', '-').replaceAll("[^A-Za-z0-9\\-]+", "_");
+        return t.length() > 60 ? t.substring(0, 60) : t;
+    }
+
+    private static boolean isJsEngineError(LoadAdError error) {
+        try {
+            String msg = error.getMessage();
+            return msg != null && msg.contains("JavascriptEngine");
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     private boolean isOnline() {
         try {
             ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -366,7 +408,15 @@ public class MainActivity extends Activity {
                             if (destroyed) return;
                             loadFailures++;
                             clearPending();
-                            pushRewardStatus("load_failed:" + error.getCode() + ":" + describeLoadError(error));
+                            if (isJsEngineError(error)) {
+                                // The SDK could not start its WebView-based engine. Log + show the facts
+                                // that decide why (WebView provider/version, Android version, device).
+                                Log.e(TAG, "JavascriptEngine unavailable; " + environmentSummary());
+                                pushRewardStatus("engine_failed:" + token(webViewVersion())
+                                        + ":" + Build.VERSION.SDK_INT + ":" + token(Build.MODEL));
+                            } else {
+                                pushRewardStatus("load_failed:" + error.getCode() + ":" + describeLoadError(error));
+                            }
                             scheduleRetry();
                         }
                     });
