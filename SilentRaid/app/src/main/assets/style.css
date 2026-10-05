@@ -8439,3 +8439,86 @@ body.gameplay-fullscreen #gameScreen #gameCanvas {
 #failureScreen .result-panel p {
   margin-bottom: 12px !important;
 }
+
+
+/* ===== V1.0.10: compact failure window (all 3 buttons visible without scrolling) + raider icon ===== */
+#failureScreen .result-panel {
+  width: min(430px, 86vw) !important;
+  max-width: 430px !important;
+  max-height: none !important;
+  overflow: visible !important;
+  padding: 12px 18px 14px !important;
+}
+#failureScreen .result-glyph {
+  width: 40px !important;
+  height: 40px !important;
+  margin: 0 auto 4px !important;
+}
+#failureScreen .result-glyph svg,
+#failureScreen .prison-glyph svg {
+  width: 34px !important;
+  height: 34px !important;
+}
+#failureScreen .result-panel h2 {
+  font-size: clamp(1.15rem, 3vw, 1.4rem) !important;
+  margin: 0 0 2px !important;
+}
+#failureScreen .result-panel p {
+  font-size: .8rem !important;
+  line-height: 1.35 !important;
+  margin: 0 0 8px !important;
+}
+#failureScreen .result-actions {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+  max-width: 100% !important;
+  width: 100% !important;
+  row-gap: 6px !important;
+}
+#failureScreen #rewardContinueBtn {
+  flex: 1 1 100% !important;
+  width: 100% !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  gap: 8px !important;
+  padding: 4px 12px !important;
+  font-size: .9rem !important;
+  border-radius: 12px !important;
+}
+#failureScreen #retryBtn,
+#failureScreen #failureLevelsBtn {
+  flex: 1 1 0 !important;
+  width: auto !important;
+  grid-column: auto !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 3px 8px !important;
+  font-size: .8rem !important;
+  border-radius: 10px !important;
+}
+/* the raider icon: emoji-sized, transparent, sharp */
+#rewardContinueBtn .reward-eye {
+  height: 1.5em !important;
+  width: auto !important;
+  max-width: none !important;
+  flex: none !important;
+  display: block !important;
+  margin: 0 !important;
+  object-fit: contain !important;
+  pointer-events: none !important;
+  -webkit-user-drag: none;
+  image-rendering: auto;
+  filter: none !important;
+}
+#rewardContinueBtn .reward-label {
+  position: relative;
+  z-index: 1;
+  white-space: nowrap;
+}
+#rewardContinueBtn .reward-eye { position: relative; z-index: 1; }
+@media (max-height: 340px) {
+  #failureScreen .result-glyph { display: none !important; }
+  #failureScreen .result-panel { padding: 10px 16px 12px !important; }
+}

@@ -2069,7 +2069,18 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   let pendingRewardPurpose=null;
   let rewardAdInFlight=false, rewardAdTimer=null;
   const REWARD_BONUS_SECONDS=25;
-  const REWARD_BTN_TEXT='▶ كمّل اللعب مجانًا  +'+REWARD_BONUS_SECONDS+' ثانية';
+  const REWARD_BTN_TEXT_CAUGHT='شاهد وأكمل المداهمة';
+  const REWARD_BTN_TEXT_TIME='شاهد واحصل على '+REWARD_BONUS_SECONDS+'ث إضافية';
+  const REWARD_EYE_SRC='assets/raid-eye.png';
+  // Sets the reward button to its normal label + the raider icon (icon is a real transparent PNG).
+  function setRewardBtnReady(btn){
+    if(!btn)return;
+    const txt=pendingRewardPurpose==='time'?REWARD_BTN_TEXT_TIME:REWARD_BTN_TEXT_CAUGHT;
+    btn.textContent='';
+    const img=document.createElement('img'); img.className='reward-eye'; img.src=REWARD_EYE_SRC; img.alt=''; img.draggable=false;
+    const sp=document.createElement('span'); sp.className='reward-label'; sp.textContent=txt;
+    btn.appendChild(img); btn.appendChild(sp);
+  }
   /**
    * After a rewarded ad the player resumes exactly where they were caught, so the guard that
    * caught them is still standing on top of them. Move EVERY guard to a far-away floor cell
@@ -2134,7 +2145,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     pendingRewardPurpose=purpose; rewardAdInFlight=false;
     if(rewardAdTimer){clearTimeout(rewardAdTimer);rewardAdTimer=null;}
     const rewardBtn=document.getElementById('rewardContinueBtn');
-    if(rewardBtn){rewardBtn.disabled=false;rewardBtn.textContent=REWARD_BTN_TEXT;}
+    if(rewardBtn){rewardBtn.disabled=false;setRewardBtnReady(rewardBtn);}
     const failureTitle=document.querySelector('#failureScreen h2');
     const failureText=document.querySelector('#failureScreen .result-panel p');
     const retry=document.getElementById('retryBtn');
@@ -2158,7 +2169,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     rewardAdInFlight=true;
     if(btn) btn.disabled=true;
     // Safety net: if the native side never answers, release the button.
-    rewardAdTimer=setTimeout(()=>{rewardAdTimer=null; if(rewardAdInFlight){rewardAdInFlight=false; if(btn){btn.disabled=false;btn.textContent=REWARD_BTN_TEXT;}}},120000);
+    rewardAdTimer=setTimeout(()=>{rewardAdTimer=null; if(rewardAdInFlight){rewardAdInFlight=false; if(btn){btn.disabled=false;setRewardBtnReady(btn);}}},120000);
     try{ ads.showRewarded(pendingRewardPurpose); }
     catch(e){
       rewardAdInFlight=false;
@@ -2172,14 +2183,14 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     const earned=pendingRewardPurpose;
     resetRewardState(); isGameOver=false;
     canvas.classList.remove('lockdown'); world.lockdown=false; world.timerRunning=true;
-    world.timer=Math.max(0,Number(world.timer)||0)+REWARD_BONUS_SECONDS;
+    if(earned==='time') world.timer=Math.max(0,Number(world.timer)||0)+REWARD_BONUS_SECONDS; // bonus seconds only when time ran out
     relocateGuardsAfterReward();
     setState('PLAYING');
   };
   window.onNativeRewardAdStatus=function(status){
     const btn=document.getElementById('rewardContinueBtn'); if(!btn)return;
     status=String(status||'');
-    if(status==='ready'){ if(!rewardAdInFlight){btn.disabled=false;btn.dataset.adReady='1';btn.textContent=REWARD_BTN_TEXT;} return; }
+    if(status==='ready'){ if(!rewardAdInFlight){btn.disabled=false;btn.dataset.adReady='1';setRewardBtnReady(btn);} return; }
     // The player already tapped the button and the ad is still loading: keep waiting. The native
     // side shows the ad as soon as it is ready and then calls onNativeRewardAdEarned.
     if(status==='loading' && rewardAdInFlight){ btn.disabled=true; btn.textContent='جارٍ تجهيز الإعلان…'; return; }
@@ -3754,15 +3765,16 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     resize();
     const ctx=canvasEl.getContext('2d');
     const count=mode==='money'?34:26;
-    const items=Array.from({length:count},(_,i)=>({
-      x:Math.random()*host.clientWidth,
-      y:-40-Math.random()*host.clientHeight,
-      vy:90+Math.random()*160,
+    let items=null;
+    const makeItems=(w,h)=>Array.from({length:count},(_,i)=>({
+      x:Math.random()*w,
+      // about 60% already inside the top of the screen so the effect is visible on the very first frame
+      y:i%5<3 ? Math.random()*h*0.5-30 : -30-Math.random()*h*0.35,
+      vy:150+Math.random()*190,
       vx:(Math.random()-.5)*25,
       rot:Math.random()*Math.PI*2,
       vr:(Math.random()-.5)*2.8,
       s:.7+Math.random()*.75,
-      delay:Math.random()*1.4,
       seed:i
     }));
     let start=performance.now();
@@ -3772,6 +3784,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
         return;
       }
       const w=Math.max(1,host.clientWidth||window.innerWidth),h=Math.max(1,host.clientHeight||window.innerHeight);
+      if(!items){ resize(); items=makeItems(w,h); }
       const dt=Math.min(.04,(now-start)/1000); start=now;
       ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
       for(const it of items){
