@@ -2,11 +2,16 @@ package com.silentraid.game;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.graphics.Color;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -24,6 +29,7 @@ import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.FullScreenContentCallback;
 import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.MobileAds;
+import com.google.android.gms.ads.ResponseInfo;
 import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 
@@ -38,7 +44,14 @@ import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
  */
 public class MainActivity extends Activity {
 
-    private static final long RETRY_LOAD_DELAY_MS = 30_000L;
+    private static final String TAG = "SilentRaidAds";
+
+    /** Back-off between automatic reload attempts after a failed load. */
+    private static final long[] RETRY_DELAYS_MS = { 3_000L, 8_000L, 20_000L, 45_000L, 60_000L };
+    /** How long a tapped "watch ad" button waits for an ad that is still loading. */
+    private static final long PENDING_WAIT_MS = 25_000L;
+    /** If the SDK's init callback never arrives, try loading anyway after this long. */
+    private static final long INIT_FALLBACK_MS = 8_000L;
 
     private WebView mWebView;
     private final Handler mHandler = new Handler(Looper.getMainLooper());
@@ -46,13 +59,36 @@ public class MainActivity extends Activity {
 
     // ---- rewarded ad state (main thread only) ----
     private boolean adsInitialized = false;
+    private boolean initFallbackFired = false;
     private boolean adLoading = false;
     private boolean adShowing = false;
     private boolean destroyed = false;
+    private boolean resumed = false;
+    private int loadFailures = 0;
     private RewardedAd rewardedAd = null;
+    /** Purpose of a button tap that arrived before an ad was ready; shown as soon as one loads. */
+    private String pendingPurpose = null;
 
     private final Runnable retryLoad = new Runnable() {
         @Override public void run() { loadRewardedAd(); }
+    };
+
+    private final Runnable initFallback = new Runnable() {
+        @Override public void run() {
+            if (!adsInitialized) {
+                initFallbackFired = true;
+                loadRewardedAd();
+            }
+        }
+    };
+
+    private final Runnable pendingTimeout = new Runnable() {
+        @Override public void run() {
+            if (pendingPurpose != null) {
+                pendingPurpose = null;
+                pushRewardStatus("not_ready");
+            }
+        }
     };
 
     // ------------------------------------------------------------------ lifecycle
@@ -61,6 +97,9 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         super.onCreate(savedInstanceState);
+        // Start the AdMob SDK before the heavy game WebView is built so its own
+        // initialisation does not compete with the game's asset loading.
+        startAds();
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
@@ -115,22 +154,23 @@ public class MainActivity extends Activity {
         setContentView(root);
         applyImmersiveSticky();
 
-        // Real AdMob SDK. Never let an ads problem take the game down.
-        try {
-            MobileAds.initialize(this, initializationStatus -> mHandler.post(() -> {
-                adsInitialized = true;
-                loadRewardedAd();
-            }));
-        } catch (Throwable t) {
-            adsInitialized = false;
-        }
-
         mWebView.loadUrl("file:///android_asset/index.html");
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        resumed = true;
+        // Coming back from the background: make sure an ad is on its way, and honour a
+        // button tap that was waiting for one.
+        if (rewardedAd != null && pendingPurpose != null && !adShowing) {
+            String waiting = pendingPurpose;
+            clearPending();
+            showRewardedNow(waiting);
+        } else if (rewardedAd == null && !adLoading && !adShowing) {
+            mHandler.removeCallbacks(retryLoad);
+            loadRewardedAd();
+        }
         if (mWebView != null) {
             mWebView.onResume();
             evaluate("if(typeof window.__silentRaidAppVisible === 'function') window.__silentRaidAppVisible();");
@@ -140,6 +180,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
+        resumed = false;
         if (mWebView != null) {
             evaluate("if(typeof window.__silentRaidAppHidden === 'function') window.__silentRaidAppHidden();");
             mWebView.onPause();
@@ -151,6 +192,7 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         destroyed = true;
         mHandler.removeCallbacksAndMessages(null);
+        pendingPurpose = null;
         rewardedAd = null;
         if (mWebView != null) {
             mWebView.destroy();
@@ -216,8 +258,83 @@ public class MainActivity extends Activity {
 
     // ------------------------------------------------------------------ rewarded ads (real AdMob)
 
+    /** Initialise the SDK off the main thread (Google's recommendation) and start loading. */
+    private void startAds() {
+        try {
+            new Thread(new Runnable() {
+                @Override public void run() {
+                    try {
+                        MobileAds.initialize(MainActivity.this, initializationStatus -> mHandler.post(() -> {
+                            adsInitialized = true;
+                            mHandler.removeCallbacks(initFallback);
+                            loadRewardedAd();
+                        }));
+                    } catch (Throwable t) {
+                        Log.w(TAG, "MobileAds.initialize failed", t);
+                    }
+                }
+            }, "silentraid-ads-init").start();
+        } catch (Throwable t) {
+            Log.w(TAG, "could not start ads init thread", t);
+        }
+        // Never depend on a single callback: if it is late or lost, still try to load.
+        mHandler.postDelayed(initFallback, INIT_FALLBACK_MS);
+    }
+
+    private boolean isOnline() {
+        try {
+            ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm == null) return true;
+            Network network = cm.getActiveNetwork();
+            if (network == null) return false;
+            NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+            return caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+        } catch (Throwable t) {
+            return true; // when in doubt, let the SDK try
+        }
+    }
+
+    /** Short, page-safe description of why a load failed (code + the SDK's own message/cause). */
+    private static String describeLoadError(LoadAdError error) {
+        StringBuilder sb = new StringBuilder();
+        try {
+            String msg = error.getMessage();
+            if (msg != null) sb.append(msg);
+            AdError cause = error.getCause();
+            if (cause != null && cause.getMessage() != null) sb.append(' ').append(cause.getMessage());
+            ResponseInfo info = error.getResponseInfo();
+            if (info != null && info.getResponseId() != null) sb.append(" id ").append(info.getResponseId());
+        } catch (Throwable ignored) { }
+        String reason = sb.toString().replaceAll("[^A-Za-z0-9]+", "_");
+        if (reason.length() > 80) reason = reason.substring(0, 80);
+        return reason;
+    }
+
+    private void scheduleRetry() {
+        if (destroyed) return;
+        int idx = Math.max(0, Math.min(loadFailures - 1, RETRY_DELAYS_MS.length - 1));
+        mHandler.removeCallbacks(retryLoad);
+        mHandler.postDelayed(retryLoad, RETRY_DELAYS_MS[idx]);
+    }
+
+    /** A waiting button tap can no longer be satisfied: drop it (the failure status is pushed by the caller). */
+    private void clearPending() {
+        pendingPurpose = null;
+        mHandler.removeCallbacks(pendingTimeout);
+    }
+
     private void loadRewardedAd() {
-        if (destroyed || !adsInitialized || adLoading || adShowing || rewardedAd != null) return;
+        if (destroyed || !(adsInitialized || initFallbackFired)) return;
+        if (adLoading || adShowing || rewardedAd != null) return;
+
+        if (!isOnline()) {
+            loadFailures++;
+            clearPending();
+            pushRewardStatus("offline");
+            scheduleRetry();
+            return;
+        }
+
         adLoading = true;
         pushRewardStatus("loading");
         try {
@@ -228,23 +345,38 @@ public class MainActivity extends Activity {
                         public void onAdLoaded(@NonNull RewardedAd ad) {
                             adLoading = false;
                             if (destroyed) return;
+                            loadFailures = 0;
+                            mHandler.removeCallbacks(retryLoad);
                             rewardedAd = ad;
-                            pushRewardStatus("ready");
+                            if (pendingPurpose != null && resumed) {
+                                // The player already tapped the button: show right away.
+                                String purpose = pendingPurpose;
+                                clearPending();
+                                showRewardedNow(purpose);
+                            } else {
+                                pushRewardStatus("ready");
+                            }
                         }
 
                         @Override
                         public void onAdFailedToLoad(@NonNull LoadAdError error) {
                             adLoading = false;
                             rewardedAd = null;
+                            Log.w(TAG, "Rewarded ad failed to load: " + error);
                             if (destroyed) return;
-                            pushRewardStatus("load_failed:" + error.getCode());
-                            mHandler.removeCallbacks(retryLoad);
-                            mHandler.postDelayed(retryLoad, RETRY_LOAD_DELAY_MS);
+                            loadFailures++;
+                            clearPending();
+                            pushRewardStatus("load_failed:" + error.getCode() + ":" + describeLoadError(error));
+                            scheduleRetry();
                         }
                     });
         } catch (Throwable t) {
             adLoading = false;
+            Log.w(TAG, "RewardedAd.load threw", t);
+            loadFailures++;
+            clearPending();
             pushRewardStatus("not_ready");
+            scheduleRetry();
         }
     }
 
@@ -252,9 +384,26 @@ public class MainActivity extends Activity {
     void onRewardAdRequested(final String purpose) {
         if (destroyed || adShowing) return;
 
+        if (rewardedAd != null) {
+            showRewardedNow(purpose);
+            return;
+        }
+
+        // No ad ready yet: remember the tap, make sure a load is running, and show as soon as it lands.
+        pendingPurpose = purpose;
+        mHandler.removeCallbacks(pendingTimeout);
+        mHandler.postDelayed(pendingTimeout, PENDING_WAIT_MS);
+        pushRewardStatus("loading");
+        if (!adLoading) {
+            mHandler.removeCallbacks(retryLoad);
+            loadRewardedAd();
+        }
+    }
+
+    private void showRewardedNow(final String purpose) {
         final RewardedAd ad = rewardedAd;
         if (ad == null) {
-            pushRewardStatus(adLoading ? "loading" : "not_ready");
+            pushRewardStatus("not_ready");
             loadRewardedAd();
             return;
         }
@@ -281,6 +430,7 @@ public class MainActivity extends Activity {
                 @Override
                 public void onAdFailedToShowFullScreenContent(@NonNull AdError adError) {
                     adShowing = false;
+                    Log.w(TAG, "Rewarded ad failed to show: " + adError);
                     pushRewardStatus("show_failed");
                     loadRewardedAd();
                 }
@@ -288,6 +438,7 @@ public class MainActivity extends Activity {
             ad.show(this, rewardItem -> earned[0] = true);
         } catch (Throwable t) {
             adShowing = false;
+            Log.w(TAG, "RewardedAd.show threw", t);
             pushRewardStatus("show_failed");
             loadRewardedAd();
         }

@@ -2132,13 +2132,17 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     const btn=document.getElementById('rewardContinueBtn'); if(!btn)return;
     status=String(status||'');
     if(status==='ready'){ if(!rewardAdInFlight){btn.disabled=false;btn.dataset.adReady='1';btn.textContent=REWARD_BTN_TEXT;} return; }
-    // any non-ready status while an ad was requested means no reward will come
+    // The player already tapped the button and the ad is still loading: keep waiting. The native
+    // side shows the ad as soon as it is ready and then calls onNativeRewardAdEarned.
+    if(status==='loading' && rewardAdInFlight){ btn.disabled=true; btn.textContent='جارٍ تجهيز الإعلان…'; return; }
+    // any other non-ready status while an ad was requested means no reward will come
     rewardAdInFlight=false; if(rewardAdTimer){clearTimeout(rewardAdTimer);rewardAdTimer=null;}
     btn.dataset.adReady='0';btn.disabled=false;
     if(status==='loading')btn.textContent='جارٍ تجهيز الإعلان…';
+    else if(status==='offline')btn.textContent='لا يوجد اتصال بالإنترنت — الإعلان يحتاج إنترنت';
     else if(status==='consent_required')btn.textContent='يلزم إعداد الموافقة في AdMob';
     else if(status==='not_ready')btn.textContent='الإعلان غير جاهز، حاول بعد لحظات';
-    else if(status.indexOf('load_failed')===0)btn.textContent='تعذر تحميل الإعلان (خطأ '+(status.split(':')[1]||'?')+')';
+    else if(status.indexOf('load_failed')===0){const q=status.split(':');btn.textContent='تعذر تحميل الإعلان (خطأ '+(q[1]||'?')+(q[2]?' - '+q[2].replace(/_/g,' ').trim():'')+')';}
     else btn.textContent='تعذر عرض الإعلان — حاول مجددًا';
   };
   window.onNativeRewardAdFailed=function(){window.onNativeRewardAdStatus('not_ready');};
@@ -2232,45 +2236,104 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     floorGrad.addColorStop(0,p.floorA); floorGrad.addColorStop(.35,p.floorB); floorGrad.addColorStop(1,p.floorC);
     target.fillStyle=floorGrad; target.fillRect(w.ox,w.oy,bw,bh);
 
-    // Floor stone tiling
+    // Floor stone tiling. Same pixels as the per-cell version, but issued as a
+    // handful of batched fills/strokes instead of ~4 canvas calls per tile.
+    const toneCells=[[],[],[],[],[],[],[]];
+    let floorCount=0;
     for(let y=minRow;y<=maxRow;y++) for(let x=minCol;x<=maxCol;x++) if(w.grid[y][x]===0){
-      const fx=w.ox+x*c,fy=w.oy+y*c,tone=((x*17+y*31+w.seed)>>>0)%7;
-      const warm=0.03+tone*.005;
-      target.fillStyle=`rgba(${p.glow},${warm})`; target.fillRect(fx+1,fy+1,c-2,c-2);
-      target.strokeStyle=`rgba(${p.line},.55)`; target.lineWidth=.8; target.strokeRect(fx+.4,fy+.4,c-.8,c-.8);
+      toneCells[((x*17+y*31+w.seed)>>>0)%7].push(x,y); floorCount++;
+    }
+    if(floorCount){
+      for(let t=0;t<7;t++){
+        const cells=toneCells[t]; if(!cells.length) continue;
+        target.fillStyle=`rgba(${p.glow},${0.03+t*.005})`;
+        target.beginPath();
+        for(let i=0;i<cells.length;i+=2) target.rect(w.ox+cells[i]*c+1,w.oy+cells[i+1]*c+1,c-2,c-2);
+        target.fill();
+      }
+      target.strokeStyle=`rgba(${p.line},.55)`; target.lineWidth=.8;
+      target.beginPath();
+      for(let t=0;t<7;t++){
+        const cells=toneCells[t];
+        for(let i=0;i<cells.length;i+=2) target.rect(w.ox+cells[i]*c+.4,w.oy+cells[i+1]*c+.4,c-.8,c-.8);
+      }
+      target.stroke();
       target.fillStyle=`rgba(${p.glow},.08)`;
-      for(let q=0;q<2;q++){const nx=fx+((tone*13+q*11)%Math.max(2,c-2))+1,ny=fy+((tone*5+q*7)%Math.max(2,c-2))+1;target.fillRect(nx,ny,1,1);}
+      target.beginPath();
+      for(let t=0;t<7;t++){
+        const cells=toneCells[t];
+        for(let i=0;i<cells.length;i+=2){
+          const fx=w.ox+cells[i]*c, fy=w.oy+cells[i+1]*c;
+          for(let q=0;q<2;q++) target.rect(fx+((t*13+q*11)%Math.max(2,c-2))+1,fy+((t*5+q*7)%Math.max(2,c-2))+1,1,1);
+        }
+      }
+      target.fill();
     }
 
-    // Walls
+    // Walls. Geometry is static per world, so it is computed once per wall and
+    // cached; every pass below is one batched canvas operation (previously each
+    // wall issued its own blurred shadow fill, clip, fills and strokes).
+    if(!w._wallShapes) w._wallShapes=new Array(w.rows*w.cols);
+    const wallList=[];
     for(let y=minRow;y<=maxRow;y++) for(let x=minCol;x<=maxCol;x++) if(w.grid[y][x]===1){
-      const wx=w.ox+x*c,wy=w.oy+y*c;
-      const basePad = c * ((1 - BRICK_SIZE_RATIO) / 2);
-      const extraPad = c * (CORRIDOR_EXTRA_CLEARANCE_RATIO / 2);
-      const leftOpen = w.grid[y]?.[x-1] !== 1;
-      const rightOpen = w.grid[y]?.[x+1] !== 1;
-      const topOpen = w.grid[y-1]?.[x] !== 1;
-      const bottomOpen = w.grid[y+1]?.[x] !== 1;
-      const left   = leftOpen ? basePad + extraPad : 0;
-      const right  = rightOpen ? basePad + extraPad : 0;
-      const top    = topOpen ? basePad + extraPad : 0;
-      const bottom = bottomOpen ? basePad + extraPad : 0;
-      const rw=Math.max(1,c-left-right), rh=Math.max(1,c-top-bottom);
-      const verticalExtra=(c*(WALL_VERTICAL_SCALE-1))/2;
-      const rx=wx+left, ry=wy+top-verticalExtra, rwFinal=rw, rhFinal=rh+verticalExtra*2;
-      const wallShape={x:rx,y:ry,w:rwFinal,h:rhFinal,bevel:1};
+      const idx=y*w.cols+x;
+      let sh=w._wallShapes[idx];
+      if(!sh){
+        const wx=w.ox+x*c,wy=w.oy+y*c;
+        const basePad = c * ((1 - BRICK_SIZE_RATIO) / 2);
+        const extraPad = c * (CORRIDOR_EXTRA_CLEARANCE_RATIO / 2);
+        const leftOpen = w.grid[y]?.[x-1] !== 1;
+        const rightOpen = w.grid[y]?.[x+1] !== 1;
+        const topOpen = w.grid[y-1]?.[x] !== 1;
+        const bottomOpen = w.grid[y+1]?.[x] !== 1;
+        const left   = leftOpen ? basePad + extraPad : 0;
+        const right  = rightOpen ? basePad + extraPad : 0;
+        const top    = topOpen ? basePad + extraPad : 0;
+        const bottom = bottomOpen ? basePad + extraPad : 0;
+        const rw=Math.max(1,c-left-right), rh=Math.max(1,c-top-bottom);
+        const verticalExtra=(c*(WALL_VERTICAL_SCALE-1))/2;
+        const rx=wx+left, ry=wy+top-verticalExtra, rhFinal=rh+verticalExtra*2;
+        const shape={x:rx,y:ry,w:rw,h:rhFinal,bevel:1};
+        sh={pts:wallPolygon(shape),rx,ry,rw,rh:rhFinal,bevel:1,
+            lineLeft:w.grid[y]?.[x-1]===0, lineTop:w.grid[y-1]?.[x]===0};
+        w._wallShapes[idx]=sh;
+      }
+      wallList.push(sh);
+    }
+    if(wallList.length){
+      const addWalls=()=>{
+        target.beginPath();
+        for(let i=0;i<wallList.length;i++){
+          const pts=wallList[i].pts;
+          target.moveTo(pts[0].x,pts[0].y);
+          for(let k=1;k<pts.length;k++) target.lineTo(pts[k].x,pts[k].y);
+          target.closePath();
+        }
+      };
+      // 1) one blurred shadow + fill for every wall at once
       target.save();
       target.shadowColor='rgba(0,0,0,.35)'; target.shadowBlur=5; target.shadowOffsetX=1.5; target.shadowOffsetY=2;
-      target.fillStyle=p.wall; traceWallPath(target,wallShape); target.fill();
+      target.fillStyle=p.wall; addWalls(); target.fill();
       target.restore();
-      traceWallPath(target,wallShape); target.save(); target.clip();
-      target.fillStyle=p.wallShade; target.fillRect(rx,ry+Math.max(0,rhFinal-5),rwFinal,Math.min(4,rhFinal));
-      target.fillStyle=p.wallTop; target.fillRect(rx,ry, rwFinal, Math.min(3,rhFinal));
+      // 2) bottom shade + top highlight, clipped to the wall outlines
+      target.save();
+      addWalls(); target.clip();
+      target.fillStyle=p.wallShade; target.beginPath();
+      for(let i=0;i<wallList.length;i++){const s=wallList[i]; target.rect(s.rx,s.ry+Math.max(0,s.rh-5),s.rw,Math.min(4,s.rh));}
+      target.fill();
+      target.fillStyle=p.wallTop; target.beginPath();
+      for(let i=0;i<wallList.length;i++){const s=wallList[i]; target.rect(s.rx,s.ry,s.rw,Math.min(3,s.rh));}
+      target.fill();
       target.restore();
-      traceWallPath(target,wallShape); target.strokeStyle=`rgba(${p.glow},.50)`;target.lineWidth=1;target.stroke();
-      target.strokeStyle=`rgba(${p.line},.42)`;target.lineWidth=.8;
-      if(w.grid[y]?.[x-1]===0){ target.beginPath(); target.moveTo(rx+.5,ry+wallShape.bevel); target.lineTo(rx+.5,ry+rhFinal-wallShape.bevel); target.stroke(); }
-      if(w.grid[y-1]?.[x]===0){ target.beginPath(); target.moveTo(rx+wallShape.bevel,ry+.5); target.lineTo(rx+rwFinal-wallShape.bevel,ry+.5); target.stroke(); }
+      // 3) outlines and inner edge highlights
+      target.strokeStyle=`rgba(${p.glow},.50)`; target.lineWidth=1; addWalls(); target.stroke();
+      target.strokeStyle=`rgba(${p.line},.42)`; target.lineWidth=.8; target.beginPath();
+      for(let i=0;i<wallList.length;i++){
+        const s=wallList[i];
+        if(s.lineLeft){ target.moveTo(s.rx+.5,s.ry+s.bevel); target.lineTo(s.rx+.5,s.ry+s.rh-s.bevel); }
+        if(s.lineTop){ target.moveTo(s.rx+s.bevel,s.ry+.5); target.lineTo(s.rx+s.rw-s.bevel,s.ry+.5); }
+      }
+      target.stroke();
     }
   }
 
@@ -3428,8 +3491,20 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   function preloadAudioBuffers(){
     if(!audio || !audio.ac) return;
     try{
-      fetch('assets/vault-open.mp3').then(r=>r.arrayBuffer()).then(buf=>audio.ac.decodeAudioData(buf)).then(b=>{ vaultBuffer=b; }).catch(()=>{});
-      fetch('assets/escape-run.mp3').then(r=>r.arrayBuffer()).then(buf=>audio.ac.decodeAudioData(buf)).then(b=>{ escapeBuffer=b; }).catch(()=>{});
+      // fetch() cannot read file:// assets inside an Android WebView, which silently
+      // forced these two effects onto the slow HTMLAudio fallback (late playback).
+      // XMLHttpRequest can, so the buffers really get pre-decoded.
+      const loadBuf=(url,done)=>{
+        try{
+          const x=new XMLHttpRequest(); x.open('GET',url,true); x.responseType='arraybuffer';
+          x.onload=()=>{ const buf=x.response; if(!buf||!buf.byteLength) return;
+            try{ audio.ac.decodeAudioData(buf).then(done).catch(()=>{}); }catch(_){} };
+          x.onerror=()=>{};
+          x.send();
+        }catch(_){}
+      };
+      loadBuf('assets/vault-open.mp3',b=>{ vaultBuffer=b; });
+      loadBuf('assets/escape-run.mp3',b=>{ escapeBuffer=b; });
     }catch(_){}
   }
 
