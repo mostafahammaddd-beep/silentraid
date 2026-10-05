@@ -1510,7 +1510,6 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
         p.keys=Math.min(3,p.keys+1);
         world.objectiveFlash=1;
         playSfx('key');
-        showMessage(`تم الحصول على مفتاح الخزنة — ${p.keys}/3`);
       }
     });
     world.vaultOpen=p.keys===3;
@@ -1519,7 +1518,6 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       if(entityTouchesRect(p,vaultRect)&&!world.vaultOpened){
         world.vaultOpened=true;
         playSfx('vault');
-        showMessage('الخزنة فتحت — اذهب إلى بوابة الهروب');
       }
     }
     world.escapeArmed=world.vaultOpened;
@@ -1598,7 +1596,6 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
         g.chaseUntil=nowSec+CHASE_SECONDS;
         g.alertTimer=CHASE_SECONDS;
         g.path=[]; g.pathIndex=0; g.pathTimer=0; g.pathTarget=null;
-        showMessage(cameraAlarm?'🚨 الكاميرا رصدتك! الشرطة تطاردك!':'🚨 الحارس رصدك! اهرب!');
         playAlarmSiren();
       }else if(g.state==='CHASE'){
         if(detectedNow){
@@ -1989,13 +1986,13 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       // A camera can only report the player when the entire sight ray is clear.
       // Any wall cell between camera and player blocks detection, regardless of range.
       const clear=inCone && hasLineOfSight(cam,p);
-      if(clear){
+      if(clear && (world.continueGrace||0)<=0){
         const firstDetection=!cam.trigger;
         cam.trigger=1;
         world.alarmUntil=Math.max(world.alarmUntil||0,nowSec+6);
         world.alarmTarget={x:p.x,y:p.y};
         if(!world.radarPulses.some(r=>Math.abs(r.x-cam.x)<1&&Math.abs(r.y-cam.y)<1&&r.life>.5)) world.radarPulses.push({x:cam.x,y:cam.y,r:12,max:176,life:.75});
-        if(firstDetection){showMessage('🚨 الكاميرا رصدتك! الشرطة تطاردك!');playSfx('alarm');}
+        if(firstDetection){playSfx('alarm');}
       }else{
         cam.trigger=Math.max(0,(cam.trigger||0)-dt*5);
       }
@@ -2037,7 +2034,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       h.cool=Math.max(0,h.cool-dt);
       if(h.cool<=0 && dist(p,h)<h.r+7 && speed>10){
         h.cool=1.25; world.radarPulses.push({x:h.x,y:h.y,r:8,max:105,life:1.0});
-        playSfx('glass'); showMessage('زجاج مكسور! الحراس تلقّوا الإنذار');
+        playSfx('glass');
       }
     }
   }
@@ -2047,7 +2044,6 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     world.timer=Math.max(0,world.timer-dt);
     if(world.timer<=0&&!world.lockdown){
       world.timer=0; world.lockdown=true; canvas.classList.add('lockdown'); playSfx('lockdown');
-      showMessage('انتهى الوقت! تم تفعيل إغلاق البنك.');
       world.guards.forEach(g=>{g.state='CHASE';g.lastKnown={...world.player};g.target={...world.player};g.vx*=2;g.vy*=2;});
     }
   }
@@ -2073,7 +2069,60 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   let pendingRewardPurpose=null;
   let rewardAdInFlight=false, rewardAdTimer=null;
   const REWARD_BONUS_SECONDS=25;
-  const REWARD_BTN_TEXT='شاهد إعلانًا واحصل على +'+REWARD_BONUS_SECONDS+' ثانية';
+  const REWARD_BTN_TEXT='▶ كمّل اللعب مجانًا  +'+REWARD_BONUS_SECONDS+' ثانية';
+  /**
+   * After a rewarded ad the player resumes exactly where they were caught, so the guard that
+   * caught them is still standing on top of them. Move EVERY guard to a far-away floor cell
+   * (by real walking distance), calm them down, and give a few seconds of protection.
+   */
+  function relocateGuardsAfterReward(){
+    if(!world||!world.guards||!world.grid||!world.player) return;
+    const p=world.player;
+    world.continueGrace=4;      // seconds with no capture / no camera alarm
+    world.alarmUntil=0;
+    (world.cameras||[]).forEach(c=>{ if(c) c.trigger=0; });
+    const pc=canvasToGrid(p.x,p.y);
+    const data=bfsDistancesFrom(world.grid,[pc.x,pc.y]);
+    const cands=[];
+    let maxD=0;
+    for(let y=0;y<world.rows;y++){
+      for(let x=0;x<world.cols;x++){
+        if(!isFloor(x,y)) continue;
+        const d=data.get(x+','+y);
+        if(d==null) continue;
+        const pos=worldToCanvas(world,x,y);
+        if(!canGuardStandAt(pos.x,pos.y,8)) continue;
+        cands.push({c:[x,y],d,pos});
+        if(d>maxD) maxD=d;
+      }
+    }
+    if(!cands.length) return;
+    const minD=Math.max(14,Math.floor(maxD*0.6));
+    let pool=cands.filter(k=>k.d>=minD);
+    if(pool.length<world.guards.length){ pool=cands.slice().sort((a,b)=>b.d-a.d).slice(0,Math.max(12,world.guards.length*4)); }
+    const placed=[];
+    world.guards.forEach(g=>{
+      let pick=null;
+      for(let tries=0;tries<40&&!pick;tries++){
+        const k=pool[Math.floor(Math.random()*pool.length)];
+        if(placed.every(q=>Math.abs(k.c[0]-q[0])+Math.abs(k.c[1]-q[1])>=6)) pick=k;
+      }
+      if(!pick) pick=pool[Math.floor(Math.random()*pool.length)];
+      placed.push(pick.c);
+      g.x=pick.pos.x; g.y=pick.pos.y; g.cell=pick.c.slice();
+      g.vx=0; g.vy=0;
+      g.state='PATROL';
+      g.alertTimer=0; g.chaseUntil=0; g.searchUntil=0;
+      g.lastKnown={x:g.x,y:g.y}; g.target={x:g.x,y:g.y};
+      g.path=[]; g.pathIndex=1; g.pathTimer=0; g.pathTarget=null;
+      g.patrol=null; g.patrolRoute=null; g.patrolRouteIndex=0; g.patrolHistory=[];
+      g.patrolCooldown=1.5; g.detourCell=null;
+      g.stuckTime=0; g.blockedFrames=0; g.stuckCooldown=0;
+      g.lastMoveX=g.x; g.lastMoveY=g.y; g.pulse=0;
+    });
+    world.anyChase=false;
+  }
+
   function resetRewardState(){
     pendingRewardPurpose=null; rewardAdInFlight=false;
     if(rewardAdTimer){clearTimeout(rewardAdTimer);rewardAdTimer=null;}
@@ -2081,7 +2130,6 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   function fail(msg, purpose='caught'){
     if(!isMapFullyLoaded||isGameOver)return;
     isGameOver=true;
-    showMessage(msg);
     canvas.classList.remove('lockdown');
     pendingRewardPurpose=purpose; rewardAdInFlight=false;
     if(rewardAdTimer){clearTimeout(rewardAdTimer);rewardAdTimer=null;}
@@ -2125,8 +2173,8 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     resetRewardState(); isGameOver=false;
     canvas.classList.remove('lockdown'); world.lockdown=false; world.timerRunning=true;
     world.timer=Math.max(0,Number(world.timer)||0)+REWARD_BONUS_SECONDS;
-    if(earned!=='time'){ world.continueGrace=2; world.guards.forEach(g=>{g.state='PATROL';g.alertTimer=0;g.path=[];g.vx=0;g.vy=0;}); }
-    setState('PLAYING'); showMessage('تمت إضافة '+REWARD_BONUS_SECONDS+' ثانية.');
+    relocateGuardsAfterReward();
+    setState('PLAYING');
   };
   window.onNativeRewardAdStatus=function(status){
     const btn=document.getElementById('rewardContinueBtn'); if(!btn)return;

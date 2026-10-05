@@ -8355,3 +8355,87 @@ body.gameplay-fullscreen #gameScreen #gameCanvas {
   margin: 0 !important;
   padding: 0 !important;
 }
+
+/* ===== V1.0.9: eye-catching "watch ad to continue" button ===== */
+#failureScreen .result-actions {
+  flex-wrap: wrap !important;
+  max-width: 420px !important;
+  row-gap: 8px !important;
+}
+
+#failureScreen #rewardContinueBtn {
+  order: -1 !important;
+  flex: 1 1 100% !important;
+  width: 100% !important;
+  height: 52px !important;
+  min-height: 52px !important;
+  position: relative !important;
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 6px 14px !important;
+  border: 2px solid #fff3b0 !important;
+  border-radius: 14px !important;
+  background: linear-gradient(180deg, #ffe066 0%, #ffb300 48%, #ff8f00 100%) !important;
+  color: #3a2200 !important;
+  font-family: 'Alexandria', 'Cairo', sans-serif !important;
+  font-weight: 800 !important;
+  font-size: 1.02rem !important;
+  line-height: 1.2 !important;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55) !important;
+  cursor: pointer !important;
+  box-shadow: 0 0 0 0 rgba(255, 196, 0, 0.7), 0 6px 18px rgba(255, 143, 0, 0.55) !important;
+  animation: srAdPulse 1.5s ease-in-out infinite !important;
+  transition: transform 0.12s ease, filter 0.12s ease !important;
+}
+
+#failureScreen #rewardContinueBtn::after {
+  content: "" !important;
+  position: absolute !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  left: -60% !important;
+  width: 38% !important;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.75), transparent) !important;
+  transform: skewX(-20deg) !important;
+  animation: srAdShine 2.6s ease-in-out infinite !important;
+  pointer-events: none !important;
+}
+
+#failureScreen #rewardContinueBtn:active:not(:disabled) {
+  transform: scale(0.97) !important;
+  filter: brightness(1.05) !important;
+}
+
+/* waiting / failure states: calm, readable, no pulsing */
+#failureScreen #rewardContinueBtn:disabled {
+  animation: none !important;
+  filter: saturate(0.6) brightness(0.9) !important;
+  cursor: default !important;
+}
+
+#failureScreen #rewardContinueBtn:disabled::after {
+  animation: none !important;
+  display: none !important;
+}
+
+@keyframes srAdPulse {
+  0%, 100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(255, 196, 0, 0.65), 0 6px 18px rgba(255, 143, 0, 0.55); }
+  50%      { transform: scale(1.035); box-shadow: 0 0 0 10px rgba(255, 196, 0, 0), 0 8px 24px rgba(255, 143, 0, 0.75); }
+}
+
+@keyframes srAdShine {
+  0%, 55% { left: -60%; }
+  100%    { left: 130%; }
+}
+
+#failureScreen #retryBtn,
+#failureScreen #failureLevelsBtn {
+  height: 40px !important;
+  min-height: 40px !important;
+}
+
+#failureScreen .result-panel p {
+  margin-bottom: 12px !important;
+}
