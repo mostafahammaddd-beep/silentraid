@@ -8522,3 +8522,131 @@ body.gameplay-fullscreen #gameScreen #gameCanvas {
   #failureScreen .result-glyph { display: none !important; }
   #failureScreen .result-panel { padding: 10px 16px 12px !important; }
 }
+
+/* ===== V1.0.11 RESULT SCREENS (rs2) ===== */
+/* Result screens redesign: police "caught" screen + gold "raid complete" screen. All sizes in em of .rs2-stage so it scales with the screen. */
+.rs2{position:absolute;inset:0;overflow:hidden;direction:rtl}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2{background:#05030a !important;display:block !important}
+#failureScreen::before,#failureScreen::after,#successScreen::before,#successScreen::after{display:none !important}
+.rs2:not(.active) *,.rs2:not(.active) *::before,.rs2:not(.active) *::after{animation-play-state:paused !important}
+.rs2-bg{position:absolute;inset:0;overflow:hidden;z-index:0;font-size:min(.97vw,2.12vh)}
+.rs2 .result-rain-canvas{z-index:1}
+.rs2-vignette{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,.68) 100%);pointer-events:none}
+
+/* ---------- stage / card ---------- */
+.rs2-stage{position:absolute;left:50%;top:50%;width:66em;height:38em;margin:-19em 0 0 -33em;font-size:min(.97vw,2.12vh);z-index:2}
+.rs2.active .rs2-stage{animation:resultPanelIn .55s cubic-bezier(.2,.85,.25,1.1) both}
+.rs2-card{position:absolute;left:0;right:0;bottom:0;z-index:2}
+.rs2-fail .rs2-card{height:31.4em;filter:drop-shadow(0 0 1.1em rgba(255,30,30,.6));animation:cardGlowRed .9s ease-in-out infinite}
+.rs2-win .rs2-card{height:26.6em;filter:drop-shadow(0 0 1.2em rgba(255,190,40,.5))}
+.rs2-frame{position:absolute;inset:0;clip-path:polygon(4.2em 0,calc(100% - 4.2em) 0,100% 4.2em,100% calc(100% - 4.2em),calc(100% - 4.2em) 100%,4.2em 100%,0 calc(100% - 4.2em),0 4.2em)}
+.rs2-fail .rs2-frame{background:linear-gradient(180deg,#ff3a35,#a50c18 55%,#ff3d2e)}
+.rs2-win .rs2-frame{background:linear-gradient(180deg,#ffe055,#e29600 55%,#ffcf3a)}
+.rs2-frame::after{content:"";position:absolute;inset:.6em;clip-path:polygon(3.7em 0,calc(100% - 3.7em) 0,100% 3.7em,100% calc(100% - 3.7em),calc(100% - 3.7em) 100%,3.7em 100%,0 calc(100% - 3.7em),0 3.7em)}
+.rs2-fail .rs2-frame::after{background:radial-gradient(ellipse at 50% 0,rgba(255,40,40,.16),transparent 60%),linear-gradient(180deg,#1d1e27,#0d0d13)}
+.rs2-win .rs2-frame::after{background:radial-gradient(ellipse at 50% 0,rgba(255,200,60,.14),transparent 60%),linear-gradient(180deg,#27272b,#0f0f12)}
+.rs2-inner{position:absolute;inset:0;display:flex;flex-direction:column;align-items:stretch;padding:2em 3.2em 2.6em;direction:rtl}
+
+/* ---------- title ---------- */
+.rs2-titlewrap{position:relative;height:8.6em;display:flex;align-items:center;justify-content:center;direction:ltr;gap:1.2em;flex:none}
+.rs2-brush{position:absolute;left:50%;top:50%;width:50em;height:9.4em;transform:translate(-50%,-50%)}
+.rs2-fail .rs2-brush{clip-path:polygon(0.0% 6.9%,2.5% 10.8%,4.9% 9.4%,8.0% 3.7%,11.3% 3.4%,14.5% 3.8%,16.9% 8.1%,21.0% 4.5%,23.7% 10.5%,28.1% 9.9%,31.2% 14.7%,33.5% 13.3%,36.4% 4.7%,38.9% 6.7%,43.0% 5.2%,46.5% 10.7%,49.6% 9.6%,51.9% 3.7%,54.6% 11.2%,57.8% 6.8%,61.3% 8.4%,64.2% 12.5%,68.0% 5.9%,71.5% 9.3%,75.7% 11.8%,78.6% 14.8%,81.1% 8.0%,85.0% 4.8%,88.3% 3.5%,92.1% 12.2%,95.6% 13.5%,98.5% 11.3%,100.0% 37.0%,97.5% 51.6%,100.0% 70.7%,100.0% 97.2%,96.7% 93.3%,94.4% 93.8%,90.7% 97.9%,86.6% 88.0%,83.5% 93.4%,81.3% 90.5%,78.7% 85.6%,76.3% 94.8%,73.8% 87.5%,70.7% 96.2%,68.3% 90.3%,64.9% 96.4%,60.8% 96.1%,58.0% 89.8%,54.9% 96.4%,50.5% 86.1%,47.9% 87.2%,45.2% 90.8%,41.6% 87.7%,39.4% 89.9%,36.4% 91.9%,32.0% 93.7%,28.6% 92.6%,24.8% 84.8%,20.6% 94.9%,16.4% 95.2%,13.3% 89.6%,10.8% 92.9%,8.5% 84.9%,5.8% 86.3%,2.8% 84.7%,0.6% 86.1%,0.0% 66.9%,2.5% 48.2%,0.0% 38.5%);background:repeating-linear-gradient(90deg,transparent 0 .7em,rgba(0,0,0,.1) .7em .85em),linear-gradient(180deg,#ff3b3b,#d00a14 60%,#8c050c)}
+.rs2-win .rs2-brush{width:48em;clip-path:polygon(0.0% 10.4%,2.5% 6.0%,5.5% 7.4%,8.0% 13.2%,12.5% 8.6%,15.8% 4.0%,18.3% 7.1%,21.1% 12.9%,23.6% 3.3%,28.0% 9.3%,30.6% 9.5%,32.8% 9.3%,37.3% 13.4%,41.1% 6.1%,44.1% 5.0%,48.1% 9.4%,52.1% 7.0%,54.8% 12.7%,59.3% 13.2%,63.3% 12.8%,67.2% 5.7%,70.6% 7.3%,72.9% 3.3%,75.7% 6.1%,79.5% 14.5%,82.7% 14.2%,87.2% 14.5%,90.3% 5.6%,93.0% 5.4%,95.6% 10.5%,99.9% 13.1%,100.0% 37.8%,97.5% 54.4%,100.0% 64.7%,100.0% 93.2%,95.7% 95.0%,91.8% 90.7%,89.2% 95.0%,86.2% 95.2%,81.8% 89.5%,78.6% 97.3%,74.8% 86.4%,72.3% 86.1%,68.0% 95.3%,65.5% 95.6%,61.0% 93.2%,58.0% 91.7%,55.5% 84.2%,51.1% 93.1%,47.7% 97.1%,44.5% 96.2%,40.4% 87.0%,37.6% 88.1%,34.8% 92.2%,32.0% 89.9%,29.5% 96.7%,26.5% 90.4%,23.0% 96.7%,19.8% 96.8%,16.5% 91.4%,13.1% 84.3%,9.8% 86.6%,7.6% 95.2%,5.0% 90.6%,1.2% 91.8%,0.0% 68.1%,2.5% 52.4%,0.0% 37.4%);background:repeating-linear-gradient(90deg,transparent 0 .7em,rgba(80,40,0,.12) .7em .85em),linear-gradient(180deg,#ffd940,#f4a200 60%,#b86d00)}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 h2.rs2-title{margin:0;position:relative;font-family:'Cairo','Alexandria',sans-serif;font-weight:900;font-size:6.2em;line-height:1.15;direction:rtl;letter-spacing:0;paint-order:stroke fill;white-space:nowrap}
+.rs2-fail h2.rs2-title{color:#fff;-webkit-text-stroke:.14em #8f0912;text-shadow:0 .07em 0 #44030a,0 0 .4em rgba(255,70,70,.65)}
+.rs2-win h2.rs2-title{color:#ffe566;background:none;-webkit-text-stroke:.15em #5b2c00;text-shadow:0 .08em 0 #3c1c00,0 0 .5em rgba(255,200,60,.7)}
+.rs2-cuffs{position:relative;width:10.5em;height:auto;flex:none;filter:drop-shadow(0 .15em .2em rgba(0,0,0,.5))}
+
+/* ---------- subtitle ---------- */
+.rs2-subrow{display:flex;align-items:center;justify-content:center;gap:1.4em;margin-top:.6em;height:3.4em;flex:none;direction:ltr}
+.rs2-subrow i{flex:1 1 0;min-width:0;max-width:15em;height:.26em;border-radius:1em}
+.rs2-fail .rs2-subrow i{background:linear-gradient(90deg,transparent,#ff2b2b 45%);box-shadow:0 0 .6em rgba(255,40,40,.8)}
+.rs2-win .rs2-subrow i{background:linear-gradient(90deg,transparent,#ffc21a 45%);box-shadow:0 0 .6em rgba(255,190,30,.8)}
+.rs2-subrow i:last-child{transform:scaleX(-1)}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 p.rs2-sub{margin:0;flex:none;font-family:'Cairo','Alexandria',sans-serif;font-size:2.45em;font-weight:700;line-height:1.3;color:#fff;text-shadow:0 .08em .14em rgba(0,0,0,.85);white-space:nowrap;direction:rtl}
+
+/* ---------- buttons ---------- */
+.rs2-actions{margin-top:auto;display:grid;grid-template-columns:1fr 1fr;gap:1.5em 1.7em;direction:rtl;filter:drop-shadow(0 .35em .45em rgba(0,0,0,.55))}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 .rs2-btn{all:unset !important;box-sizing:border-box !important;position:relative !important;display:flex !important;align-items:center !important;justify-content:center !important;gap:1em !important;direction:ltr !important;cursor:pointer !important;height:5.6em !important;font-size:1em !important;color:#fff !important;border:.4em solid transparent !important;clip-path:polygon(1.5em 0,calc(100% - 1.5em) 0,100% 1.5em,100% calc(100% - 1.5em),calc(100% - 1.5em) 100%,1.5em 100%,0 calc(100% - 1.5em),0 1.5em) !important;background:linear-gradient(var(--fill)) padding-box,linear-gradient(var(--edge)) border-box !important;transition:transform .2s ease,filter .2s ease !important;will-change:transform !important;-webkit-tap-highlight-color:transparent !important;user-select:none !important}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 .rs2-gold{--fill:180deg,#ffea6c 0%,#ffc41c 48%,#f29a07 100%;--edge:180deg,#fff4b0,#ff9d00 60%,#a85800;color:#2a1700 !important}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 .rs2-red{--fill:180deg,#ff3d41,#e1141d 55%,#b00010;--edge:180deg,#ffa09b,#d10c16 60%,#6a0008}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 .rs2-dark{--fill:180deg,#464b57,#2b2e37 55%,#1e2028;--edge:180deg,#9096a4,#4d525e 60%,#2b2e36}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 .rs2-btn:hover{transform:translateY(-.2em) !important}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 .rs2-btn:active{transform:scale(.97) !important}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 .rs2-btn:disabled{opacity:.55 !important;filter:saturate(.6) !important;cursor:default !important}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 .rs2-btn::after{all:unset !important;content:"" !important;position:absolute !important;inset:0 !important;background:radial-gradient(circle at center,rgba(255,255,255,.34) 0%,transparent 70%) !important;opacity:0 !important;transform:scale(.5) !important;transition:opacity .4s ease,transform .4s ease !important;pointer-events:none !important}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 .rs2-btn:active::after{opacity:1 !important;transform:scale(2.2) !important;transition:none !important}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 .rs2-btn::before{display:none !important}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 .rs2-btn-label,:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 .reward-label{font-family:'Cairo','Alexandria',sans-serif !important;font-weight:900 !important;font-size:2.6em !important;line-height:1.2 !important;direction:rtl !important;white-space:nowrap !important;position:relative !important;z-index:1 !important;color:inherit !important;text-shadow:0 .06em .08em rgba(0,0,0,.45) !important}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 .rs2-gold .rs2-btn-label,:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 .rs2-gold .reward-label{text-shadow:0 .05em 0 rgba(255,255,255,.35) !important}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 .rs2-ico{width:3.1em;height:3.1em;flex:none;position:relative;z-index:1}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 #rewardContinueBtn{height:6.4em !important;grid-column:1/-1 !important}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 #rewardContinueBtn .reward-label{font-size:3em !important}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2.is-time #rewardContinueBtn .reward-label{font-size:2.5em !important}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 .reward-eye{position:absolute !important;left:4em !important;top:50% !important;height:4.3em !important;width:auto !important;margin:-2.15em 0 0 0 !important;max-width:none !important;object-fit:contain !important;pointer-events:none !important;z-index:1 !important;filter:none !important;display:block !important}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 .rs2-actions-2{grid-template-columns:1fr 1fr}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 .rs2-actions-2 .rs2-btn{height:5.8em !important}
+
+/* ---------- police siren (fail) ---------- */
+.rs2-siren{position:absolute;left:50%;top:0;width:9.8em;height:7.8em;margin-left:-4.9em}
+.rs2-siren-svg{position:absolute;inset:0;width:100%;height:100%;z-index:3;overflow:visible}
+.rs2-siren-rays,.rs2-siren-halo{position:absolute;left:50%;pointer-events:none;opacity:.1;animation:sirenFlash .9s ease-in-out infinite}
+.rs2-siren-rays{top:60%;width:60em;height:34em;margin:-17em 0 0 -30em;z-index:1;background:repeating-conic-gradient(from -90deg at 50% 50%,rgba(255,70,50,.62) 0 3.6deg,transparent 3.6deg 12deg);-webkit-mask-image:radial-gradient(closest-side,#000 5%,transparent 100%);mask-image:radial-gradient(closest-side,#000 5%,transparent 100%)}
+.rs2-siren-halo{top:48%;width:24em;height:24em;margin:-12em 0 0 -12em;z-index:1;background:radial-gradient(closest-side,rgba(255,60,40,.95),rgba(255,40,30,.35) 50%,transparent 100%)}
+.siren-dome{animation:sirenDome .9s ease-in-out infinite;transform-origin:50% 90%}
+.siren-bulb,.siren-bulb2{animation:sirenBulb .9s ease-in-out infinite}
+@keyframes sirenFlash{0%{opacity:.08}18%{opacity:1}50%{opacity:.82}80%{opacity:.1}100%{opacity:.08}}
+@keyframes sirenBulb{0%{opacity:.15}18%{opacity:1}50%{opacity:.85}80%{opacity:.15}100%{opacity:.15}}
+@keyframes sirenDome{0%{filter:brightness(.55) saturate(.85)}18%{filter:brightness(1.4) saturate(1.25)}50%{filter:brightness(1.15) saturate(1.15)}80%{filter:brightness(.58) saturate(.88)}100%{filter:brightness(.55) saturate(.85)}}
+@keyframes cardGlowRed{0%{filter:drop-shadow(0 0 .5em rgba(255,30,30,.3))}18%{filter:drop-shadow(0 0 1.5em rgba(255,40,40,.85))}50%{filter:drop-shadow(0 0 1.1em rgba(255,40,40,.6))}80%{filter:drop-shadow(0 0 .5em rgba(255,30,30,.3))}100%{filter:drop-shadow(0 0 .5em rgba(255,30,30,.3))}}
+
+/* ---------- fail background: falling chains ---------- */
+.rs2-fail .rs2-bg{background:repeating-linear-gradient(115deg,transparent 0 9%,rgba(255,40,40,.06) 9% 10.5%),radial-gradient(ellipse 75% 85% at 50% 42%,#5d0b16 0%,#2b060d 46%,#0d0206 100%)}
+.rs2-glow{position:absolute;left:50%;top:38%;width:95vw;height:75vh;transform:translate(-50%,-50%);background:radial-gradient(closest-side,rgba(255,40,40,.5),transparent);opacity:.1;animation:sirenFlash .9s ease-in-out infinite}
+.rs2-flash{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 15%,rgba(255,50,40,.4),transparent 62%);mix-blend-mode:screen;opacity:.05;animation:sirenFlash .9s ease-in-out infinite}
+.rs2-chains{position:absolute;inset:0;overflow:hidden;--chain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 240'%3E%3Cdefs%3E%3ClinearGradient id='m' x1='0' x2='1'%3E%3Cstop offset='0' stop-color='%23dfe3ea'/%3E%3Cstop offset='.35' stop-color='%23939aa8'/%3E%3Cstop offset='.72' stop-color='%23585e6c'/%3E%3Cstop offset='1' stop-color='%2330343f'/%3E%3C/linearGradient%3E%3ClinearGradient id='ms' x1='0' x2='1'%3E%3Cstop offset='0' stop-color='%238b919e'/%3E%3Cstop offset='.5' stop-color='%23e4e7ee'/%3E%3Cstop offset='1' stop-color='%23454b57'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='36' y='96' width='28' height='168' rx='14' fill='none' stroke='%2312060a' stroke-width='17'/%3E%3Crect x='36' y='96' width='28' height='168' rx='14' fill='none' stroke='url(%23ms)' stroke-width='12'/%3E%3Crect x='36' y='96' width='28' height='168' rx='14' fill='none' stroke='%23f2f4f8' stroke-opacity='.5' stroke-width='3' transform='translate(-3 0)'/%3E%3Crect x='36' y='96' width='28' height='168' rx='14' fill='none' stroke='%23ff4635' stroke-opacity='0.4' stroke-width='3.5' transform='translate(5 0)'/%3E%3Crect x='36' y='-144' width='28' height='168' rx='14' fill='none' stroke='%2312060a' stroke-width='17'/%3E%3Crect x='36' y='-144' width='28' height='168' rx='14' fill='none' stroke='url(%23ms)' stroke-width='12'/%3E%3Crect x='36' y='-144' width='28' height='168' rx='14' fill='none' stroke='%23f2f4f8' stroke-opacity='.5' stroke-width='3' transform='translate(-3 0)'/%3E%3Crect x='36' y='-144' width='28' height='168' rx='14' fill='none' stroke='%23ff4635' stroke-opacity='0.4' stroke-width='3.5' transform='translate(5 0)'/%3E%3Crect x='15' y='6' width='70' height='132' rx='33' fill='none' stroke='%2312060a' stroke-width='23'/%3E%3Crect x='15' y='6' width='70' height='132' rx='33' fill='none' stroke='url(%23m)' stroke-width='17'/%3E%3Crect x='15' y='6' width='70' height='132' rx='33' fill='none' stroke='%23f2f4f8' stroke-opacity='.5' stroke-width='3' transform='translate(-4 -1)'/%3E%3Crect x='15' y='6' width='70' height='132' rx='33' fill='none' stroke='%23ff4635' stroke-opacity='0.5' stroke-width='3.5' transform='translate(6 2)'/%3E%3C/svg%3E")}
+.rs2 .chain-wrap{position:absolute;top:-35%;height:170%;left:var(--x);width:var(--w);transform:rotate(var(--rot,0deg));opacity:var(--o,1);filter:blur(var(--b,0px))}
+.rs2 .chain{position:absolute;left:0;right:0;top:calc(var(--w) * -2.4);height:calc(100% + var(--w) * 2.4);background-image:var(--chain);background-repeat:repeat-y;background-size:100% auto;animation:chainFall var(--dur,11s) linear infinite;will-change:transform}
+@keyframes chainFall{from{transform:translateY(0)}to{transform:translateY(calc(var(--w) * 2.4))}}
+
+/* ---------- win: bag + background ---------- */
+.rs2-win .rs2-bg{background:radial-gradient(ellipse 80% 90% at 50% 28%,#14698c 0%,#0b3352 38%,#050d1a 100%)}
+.rs2-bokeh i{position:absolute;left:var(--x);top:var(--y);width:var(--s);height:var(--s);margin:calc(var(--s) / -2) 0 0 calc(var(--s) / -2);border-radius:50%;background:radial-gradient(circle,rgba(255,205,80,.4),rgba(255,205,80,0) 70%);animation:bokehDrift var(--d) ease-in-out infinite alternate;animation-delay:var(--dl)}
+@keyframes bokehDrift{from{transform:translate(0,0) scale(1)}to{transform:translate(1.6em,-1.8em) scale(1.25)}}
+.rs2-bag{position:absolute;left:50%;top:.1em;width:12em;height:11.3em;margin-left:-6em}
+.rs2-bag-float{position:absolute;inset:0;z-index:3;animation:bagFloat 3.2s ease-in-out infinite;filter:drop-shadow(0 .5em .5em rgba(0,0,0,.45))}
+.rs2-bag-svg{width:100%;height:100%;display:block;overflow:visible}
+.rs2-bag-rays,.rs2-bag-halo{position:absolute;left:50%;pointer-events:none}
+.rs2-bag-rays{top:56%;width:70em;height:70em;margin:-35em 0 0 -35em;z-index:1;background:repeating-conic-gradient(from 0deg at 50% 50%,rgba(255,214,90,.34) 0 4deg,transparent 4deg 15deg);-webkit-mask-image:radial-gradient(closest-side,#000 6%,transparent 82%);mask-image:radial-gradient(closest-side,#000 6%,transparent 82%);animation:raysSpin 38s linear infinite}
+.rs2-bag-halo{top:52%;width:26em;height:26em;margin:-13em 0 0 -13em;z-index:1;background:radial-gradient(closest-side,rgba(255,215,90,.9),rgba(255,190,40,.3) 55%,transparent 100%);animation:bagGlow 3.2s ease-in-out infinite}
+@keyframes bagFloat{0%,100%{transform:translateY(0) rotate(-2.2deg) scale(1)}50%{transform:translateY(-.8em) rotate(2.2deg) scale(1.045)}}
+@keyframes bagGlow{0%,100%{opacity:.55;transform:scale(.94)}50%{opacity:1;transform:scale(1.08)}}
+@keyframes raysSpin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.rs2 *{animation:none !important}}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 .reward-badge{position:absolute !important;right:.96em !important;top:50% !important;margin-top:-.82em !important;height:1.64em !important;min-width:3.28em !important;padding:0 .48em !important;box-sizing:border-box !important;display:flex !important;align-items:center !important;justify-content:center !important;clip-path:polygon(.36em 0,calc(100% - .36em) 0,100% .36em,100% calc(100% - .36em),calc(100% - .36em) 100%,.36em 100%,0 calc(100% - .36em),0 .36em) !important;background:linear-gradient(180deg,#5b3300,#2e1800) !important;border:.064em solid #ffe08a !important;color:#ffe27a !important;font-family:'Cairo','Alexandria',sans-serif !important;font-weight:900 !important;font-size:2.5em !important;z-index:1 !important;direction:ltr !important;line-height:1 !important;text-shadow:none !important}
+
+/* ===== V1.0.13 RESULT SCREENS: smoothness + new gold bag + gradual siren pulse ===== */
+/* Smoothness: animate only transform/opacity on their own GPU layers (no animated filters, no blur, no blend modes). */
+.rs2-bg,.rs2-chains{contain:layout paint}
+.rs2 .chain-wrap{filter:none !important;will-change:auto}
+.rs2 .chain{animation-name:chainFall;animation-duration:calc(var(--dur,11s) * .3) !important;animation-timing-function:linear;animation-iteration-count:infinite;will-change:transform;backface-visibility:hidden;transform:translate3d(0,0,0)}
+@keyframes chainFall{from{transform:translate3d(0,0,0)}to{transform:translate3d(0,calc(var(--w) * 2.4),0)}}
+.rs2 .result-rain-canvas{transform:translateZ(0);will-change:transform}
+.rs2-bokeh i{will-change:transform}
+.rs2-flash{mix-blend-mode:normal !important}
+.rs2-bag-rays{will-change:transform;backface-visibility:hidden}
+.rs2-bag-halo{will-change:transform,opacity}
+
+/* Failure: the old hard strobe is replaced by a gradual pulse - fades in over 1s, fades out over 1s, then repeats. */
+@keyframes sirenPulse{0%{opacity:.04}50%{opacity:1}100%{opacity:.04}}
+.rs2-glow,.rs2-flash,.rs2-siren-rays,.rs2-siren-halo,.siren-bulb,.siren-bulb2{animation:sirenPulse 2s ease-in-out infinite !important;will-change:opacity}
+.siren-dome{animation:none !important;filter:none !important}
+.rs2-fail .rs2-card{animation:none !important;filter:drop-shadow(0 0 .8em rgba(255,30,30,.35))}
+.rs2-fail .rs2-card::before{content:"";position:absolute;inset:-1.6em;z-index:-1;pointer-events:none;background:radial-gradient(ellipse at center,rgba(255,40,40,.6) 45%,rgba(255,40,40,0) 74%);opacity:.04;animation:sirenPulse 2s ease-in-out infinite;will-change:opacity}
+
+/* Win: new bag */
+.rs2-bag{width:12.3em;height:11.3em;margin-left:-6.15em}
+.rs2-bag-float{filter:none !important;animation:bagFloat 3.6s ease-in-out infinite !important;will-change:transform;backface-visibility:hidden}
+@keyframes bagFloat{0%,100%{transform:translate3d(0,0,0) rotate(-1.6deg)}50%{transform:translate3d(0,-.8em,0) rotate(1.6deg)}}
+.bag-spark{transform-box:fill-box;transform-origin:center;opacity:0;animation:bagSpark 2.4s ease-in-out infinite;animation-delay:var(--sd,0s)}
+@keyframes bagSpark{0%,100%{opacity:0;transform:scale(.3) rotate(0deg)}50%{opacity:1;transform:scale(1) rotate(45deg)}}

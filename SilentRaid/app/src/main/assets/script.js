@@ -304,6 +304,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   let lastFrame = performance.now();
 
   function stopAllAudioForAppBackground(){
+    try{ sirenStop(true); }catch(_){}
     appAudioSuspended = true;
     if(appAudioResumeTimer){ clearTimeout(appAudioResumeTimer); appAudioResumeTimer=0; }
     try{ if(mainTitleFadeTimer) clearInterval(mainTitleFadeTimer); mainTitleFadeTimer=0; }catch(_){}
@@ -2075,12 +2076,15 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   // Sets the reward button to its normal label + the raider icon (icon is a real transparent PNG).
   function setRewardBtnReady(btn){
     if(!btn)return;
-    const txt=pendingRewardPurpose==='time'?REWARD_BTN_TEXT_TIME:REWARD_BTN_TEXT_CAUGHT;
+    const isTime=pendingRewardPurpose==='time';
     btn.textContent='';
     const img=document.createElement('img'); img.className='reward-eye'; img.src=REWARD_EYE_SRC; img.alt=''; img.draggable=false;
-    const sp=document.createElement('span'); sp.className='reward-label'; sp.textContent=txt;
+    const sp=document.createElement('span'); sp.className='reward-label'; sp.textContent=isTime?REWARD_BTN_TEXT_TIME:REWARD_BTN_TEXT_CAUGHT;
     btn.appendChild(img); btn.appendChild(sp);
+    if(isTime){ const bd=document.createElement('span'); bd.className='reward-badge'; bd.textContent='+'+REWARD_BONUS_SECONDS; btn.appendChild(bd); }
+    const scr=document.getElementById('failureScreen'); if(scr) scr.classList.toggle('is-time',isTime);
   }
+
   /**
    * After a rewarded ad the player resumes exactly where they were caught, so the guard that
    * caught them is still standing on top of them. Move EVERY guard to a far-away floor cell
@@ -2146,19 +2150,17 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     if(rewardAdTimer){clearTimeout(rewardAdTimer);rewardAdTimer=null;}
     const rewardBtn=document.getElementById('rewardContinueBtn');
     if(rewardBtn){rewardBtn.disabled=false;setRewardBtnReady(rewardBtn);}
-    const failureTitle=document.querySelector('#failureScreen h2');
-    const failureText=document.querySelector('#failureScreen .result-panel p');
-    const retry=document.getElementById('retryBtn');
+    const failureTitle=document.querySelector('#failureScreen .rs2-title');
+    const failureText=document.querySelector('#failureScreen .rs2-sub');
     if(failureTitle) failureTitle.textContent=purpose==='time'?'انتهى الوقت!':'اتمسكت!';
-    if(failureText) failureText.textContent=purpose==='time'?'نفد الوقت المحدد ولم تتمكن من الهروب بالمسروقات.':'أحاط بك رجال الأمن وأُغلقت العملية.';
-    if(retry) retry.textContent='↩ إعادة المحاولة';
+    if(failureText) failureText.textContent=purpose==='time'?'انتهى الوقت قبل أن تهرب بالمسروقات.':'أحاط بك رجال الأمن وأُغلقت العملية.';
     setState('FAILURE');
-    startResultRain('cuffs');
     fadeGameOverMusicIn();
   }
 
   function requestRewardContinue(){
     if(!pendingRewardPurpose || rewardAdInFlight) return;
+    sirenStop(true);
     const btn=document.getElementById('rewardContinueBtn');
     const ads=window.SilentRaidAds;
     if(!ads || typeof ads.showRewarded!=='function'){
@@ -2758,8 +2760,12 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
 
     if(img && img.complete && img.naturalWidth > 0){
       const dx = -drawW * 0.50;
-      const dy = -drawH * (THIEF_SPRITE_ANCHOR_Y / THIEF_SPRITE_CANVAS);
-      target.drawImage(img, dx, dy, drawW, drawH);
+      // Some poses (look-up) carry extra transparent headroom so the beanie is not clipped:
+      // the image is taller than 480px, so scale height and shift the anchor accordingly.
+      const padTop = Math.max(0, img.naturalHeight - THIEF_SPRITE_CANVAS);
+      const dy = -drawH * ((THIEF_SPRITE_ANCHOR_Y + padTop) / THIEF_SPRITE_CANVAS);
+      const drawHImg = drawH * (img.naturalHeight / THIEF_SPRITE_CANVAS);
+      target.drawImage(img, dx, dy, drawW, drawHImg);
       if(hasLoot) drawLootBagFill(target, poseKey);
 
       // Cohesive subtle blocky/square toon highlights matching the guard's blocky aesthetic on menu
@@ -3426,6 +3432,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   }
 
   function stopResultMusicNow(){
+    sirenStop(true);
     try{
       if(resultMusicFadeTimer)clearInterval(resultMusicFadeTimer);
       resultMusicFadeTimer=0;
@@ -3434,42 +3441,81 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     }catch(_){}
   }
 
-  function ensureGameOverMusic(){
+  // ---- Failure-screen audio sequence ----
+  // t=0   failure screen appears (silence)
+  // t=1s  "you lose" (assets/you-lose.mp3) AND the losing horn (assets/losing-horn.mp3) start TOGETHER (mix)
+  // when the mix finishes, the horn alone is played once more
+  const LOSE_SFX_DELAY_MS=1000;    // delay before the mix starts
+  const LOSE_SFX_VOLUME=0.8;       // "you lose" level (0..1)
+  const LOSE_HORN_VOLUME=0.6;      // horn level while mixed with "you lose" (0..1)
+  const LOSE_HORN_SOLO_VOLUME=0.7; // horn level when it is replayed alone (0..1)
+  const LOSE_HORN_REPLAYS=1;       // how many times the horn is replayed alone after the mix
+  let loseSfxEl=null, loseHornEl=null, loseTimers=[], sirenFadeTimer=0, loseHornPlays=0;
+  function loseClearTimers(){ loseTimers.forEach(t=>clearTimeout(t)); loseTimers=[]; }
+  function loseKill(el){ if(!el)return; try{el.pause();el.currentTime=0;}catch(_){} }
+  function loseActive(){ return isGameOver && gameState==='FAILURE' && musicEnabled && !isMuted; }
+  function sirenStop(fast){
+    loseClearTimers();
+    loseHornPlays=LOSE_HORN_REPLAYS;   // block any pending replay
+    if(sirenFadeTimer){clearInterval(sirenFadeTimer);sirenFadeTimer=0;}
+    const els=[loseSfxEl,loseHornEl].filter(el=>el&&!el.paused);
+    if(!els.length)return;
+    if(fast){ els.forEach(loseKill); return; }
+    const v0=els.map(el=>el.volume), t0=performance.now();
+    sirenFadeTimer=setInterval(()=>{
+      const p=Math.min(1,(performance.now()-t0)/500);
+      els.forEach((el,i)=>{ try{ el.volume=Math.max(0,v0[i]*(1-p)); }catch(_){} });
+      if(p>=1){ clearInterval(sirenFadeTimer);sirenFadeTimer=0; els.forEach(loseKill); }
+    },30);
+  }
+  function losePlay(el){
+    const pr=el.play();
+    if(pr&&typeof pr.catch==='function') pr.catch(err=>console.warn('lose audio failed',err));
+  }
+  function loseEnsure(){
+    if(!loseSfxEl){ loseSfxEl=new Audio('assets/you-lose.mp3'); loseSfxEl.preload='auto'; loseSfxEl.loop=false; }
+    if(!loseHornEl){ loseHornEl=new Audio('assets/losing-horn.mp3'); loseHornEl.preload='auto'; loseHornEl.loop=false; }
+  }
+  let loseSfxDone=false, loseHornDone=false;
+  function loseMaybeReplayHorn(){
+    // runs when the mix has fully finished (both files ended) -> horn alone again
+    if(!(loseSfxDone && loseHornDone)) return;
+    if(!loseActive() || loseHornPlays>=LOSE_HORN_REPLAYS) return;
+    loseHornPlays++;
     try{
-      if(!gameOverMusic){
-        gameOverMusic=new Audio('assets/game-over.mp3');
-        gameOverMusic.preload='auto';
-        gameOverMusic.loop=false;
-        gameOverMusic.volume=0;
-      }
-      gameOverMusic.muted=isMuted;
-      return gameOverMusic;
-    }catch(_){return null;}
+      loseHornEl.muted=isMuted; loseHornEl.volume=LOSE_HORN_SOLO_VOLUME;
+      try{ loseHornEl.currentTime=0; }catch(_){}
+      loseHornDone=false;   // the replay ends the same way; loseHornPlays stops it from looping forever
+      losePlay(loseHornEl);
+    }catch(err){ console.warn('horn replay failed',err); }
+  }
+  function loseStartMix(){
+    if(!loseActive()) return;
+    try{
+      loseEnsure();
+      loseSfxDone=false; loseHornDone=false; loseHornPlays=0;
+      loseSfxEl.onended=()=>{ loseSfxDone=true; loseMaybeReplayHorn(); };
+      loseHornEl.onended=()=>{ loseHornDone=true; loseMaybeReplayHorn(); };
+      loseSfxEl.muted=isMuted; loseSfxEl.volume=LOSE_SFX_VOLUME;
+      loseHornEl.muted=isMuted; loseHornEl.volume=LOSE_HORN_VOLUME;
+      try{ loseSfxEl.currentTime=0; loseHornEl.currentTime=0; }catch(_){}
+      // start both in the same tick so they stay in sync
+      losePlay(loseSfxEl); losePlay(loseHornEl);
+    }catch(err){ console.warn('lose mix failed',err); }
+  }
+  function sirenStart(){
+    if(!musicEnabled||isMuted)return;
+    sirenStop(true);
+    loseHornPlays=0; loseSfxDone=false; loseHornDone=false;
+    try{ loseEnsure(); }catch(_){}       // warm the files so the mix starts on time
+    loseTimers.push(setTimeout(loseStartMix,LOSE_SFX_DELAY_MS));
   }
 
+  function ensureGameOverMusic(){ return null; }   // old game-over track removed (siren instead)
+
   function fadeGameOverMusicIn(){
-    const gm=ensureGameOverMusic();
-    if(!gm||!musicEnabled)return;
-    try{
-      if(resultMusicFadeTimer)clearInterval(resultMusicFadeTimer);
-      gm.pause(); gm.currentTime=0; gm.muted=false; gm.volume=0;
-      // Game Over music starts 1/3 second after the failure screen appears.
-      const target=.756;
-      setTimeout(()=>{
-        if(!gm||!musicEnabled||!isGameOver||gm.muted)return;
-        try{
-          void gm.play();
-          const start=performance.now();
-          resultMusicFadeTimer=setInterval(()=>{
-            if(!gm||gm.paused){clearInterval(resultMusicFadeTimer);resultMusicFadeTimer=0;return;}
-            const p=Math.min(1,(performance.now()-start)/850);
-            const s=p*p*(3-2*p);
-            gm.volume=target*s;
-            if(p>=1){clearInterval(resultMusicFadeTimer);resultMusicFadeTimer=0;}
-          },30);
-        }catch(_){ }
-      },333);
-    }catch(_){ }
+    // the sequence timers (1s "you lose" -> 4s horn) are counted from the moment the failure screen appears
+    if(isGameOver && gameState==='FAILURE') sirenStart();
   }
 
   function ensureResultMusic(){
@@ -3508,6 +3554,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   }
 
   function fadeResultMusicOut(done){
+    sirenStop(false);
     const tracks=[resultMusic,gameOverMusic].filter(Boolean);
     if(!tracks.length){ if(typeof done==='function')done(); return; }
     try{
@@ -3770,13 +3817,45 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       x:Math.random()*w,
       // about 60% already inside the top of the screen so the effect is visible on the very first frame
       y:i%5<3 ? Math.random()*h*0.5-30 : -30-Math.random()*h*0.35,
-      vy:150+Math.random()*190,
+      vy:(mode==='money'?465:150)+Math.random()*(mode==='money'?530:190),   // money fall speed x1.6
       vx:(Math.random()-.5)*25,
       rot:Math.random()*Math.PI*2,
       vr:(Math.random()-.5)*2.8,
       s:.7+Math.random()*.75,
       seed:i
     }));
+    // Money pieces are drawn once into small offscreen sprites; each frame only blits them (much smoother than re-building gradients per frame).
+    const makeMoneySprite=(it)=>{
+      const k=it.seed%3;
+      let half;
+      if(k===0){ half=13*it.s*(it.seed%7===0?1.9:1)+3; }
+      else { half=36*it.s*(it.seed%5===0?1.7:1)/2+4; }
+      half=Math.ceil(half);
+      const sp=document.createElement('canvas');
+      sp.width=sp.height=Math.ceil(half*2*dpr);
+      const sc=sp.getContext('2d');
+      sc.setTransform(dpr,0,0,dpr,half*dpr,half*dpr);
+      if(k===0){
+        const r=13*it.s*(it.seed%7===0?1.9:1);
+        const g=sc.createRadialGradient(-r*.3,-r*.3,r*.1,0,0,r);
+        g.addColorStop(0,'#fff0a0');g.addColorStop(.6,'#ffc828');g.addColorStop(1,'#c98100');
+        sc.fillStyle=g;sc.strokeStyle='#8a5700';sc.lineWidth=Math.max(1,r*.12);
+        sc.beginPath();sc.arc(0,0,r,0,Math.PI*2);sc.fill();sc.stroke();
+        sc.strokeStyle='rgba(120,70,0,.45)';sc.lineWidth=Math.max(1,r*.09);sc.beginPath();sc.arc(0,0,r*.72,0,Math.PI*2);sc.stroke();
+        sc.fillStyle='#7a4607';sc.font='bold '+(r*1.05)+'px sans-serif';sc.textAlign='center';sc.textBaseline='middle';sc.fillText('$',0,r*.06);
+      }else{
+        const ww=36*it.s*(it.seed%5===0?1.7:1),hh=ww*.56;
+        const g=sc.createLinearGradient(-ww/2,-hh/2,ww/2,hh/2);
+        g.addColorStop(0,'#58c26a');g.addColorStop(1,'#2a8a43');
+        sc.fillStyle=g;sc.strokeStyle='#17592a';sc.lineWidth=Math.max(1,ww*.045);
+        sc.beginPath();roundedRectPath(sc,-ww/2,-hh/2,ww,hh,ww*.08);sc.fill();sc.stroke();
+        sc.strokeStyle='rgba(230,255,230,.55)';sc.lineWidth=Math.max(1,ww*.03);
+        sc.beginPath();roundedRectPath(sc,-ww*.42,-hh*.36,ww*.84,hh*.72,ww*.05);sc.stroke();
+        sc.fillStyle='rgba(235,255,235,.85)';sc.beginPath();sc.arc(0,0,hh*.26,0,Math.PI*2);sc.fill();
+        sc.fillStyle='#1d6a33';sc.font='bold '+(hh*.42)+'px sans-serif';sc.textAlign='center';sc.textBaseline='middle';sc.fillText('$',0,hh*.03);
+      }
+      it.sprite=sp;it.half=half;
+    };
     let start=performance.now();
     function frame(now){
       if(!canvasEl.isConnected || (mode==='money' ? gameState!=='SUCCESS' : gameState!=='FAILURE')){
@@ -3784,21 +3863,42 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
         return;
       }
       const w=Math.max(1,host.clientWidth||window.innerWidth),h=Math.max(1,host.clientHeight||window.innerHeight);
-      if(!items){ resize(); items=makeItems(w,h); }
+      if(!items){ resize(); items=makeItems(w,h); if(mode==='money') items.forEach(makeMoneySprite); }
       const dt=Math.min(.04,(now-start)/1000); start=now;
       ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
       for(const it of items){
         it.y+=it.vy*dt;it.x+=it.vx*dt;it.rot+=it.vr*dt;
         if(it.y>h+60){it.y=-40-Math.random()*140;it.x=Math.random()*w;}
         const alpha=Math.min(1,Math.max(0,(it.y+80)/120));
-        ctx.save();ctx.translate(it.x,it.y);ctx.rotate(it.rot);ctx.globalAlpha=alpha;
         if(mode==='money'){
-          const ww=30*it.s,hh=19*it.s;
-          ctx.fillStyle='#d4a72c';ctx.strokeStyle='#8e6411';ctx.lineWidth=1.5;
-          ctx.beginPath();roundedRectPath(ctx,-ww/2,-hh/2,ww,hh,5);ctx.fill();ctx.stroke();
-          ctx.fillStyle='#f8df77';ctx.beginPath();ctx.arc(0,0,5.2*it.s,0,Math.PI*2);ctx.fill();
-          ctx.fillStyle='#6e4e13';ctx.font=`bold ${12*it.s}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('$',0,1);
-          ctx.strokeStyle='rgba(255,244,170,.55)';ctx.beginPath();ctx.moveTo(-ww*.32,0);ctx.lineTo(ww*.32,0);ctx.stroke();
+          const cs=Math.cos(it.rot)*dpr,sn=Math.sin(it.rot)*dpr;
+          ctx.setTransform(cs,sn,-sn,cs,it.x*dpr,it.y*dpr);
+          ctx.globalAlpha=alpha;
+          ctx.drawImage(it.sprite,-it.half,-it.half,it.half*2,it.half*2);
+          continue;
+        }
+        ctx.save();ctx.translate(it.x,it.y);ctx.rotate(it.rot);ctx.globalAlpha=alpha;
+        if(false){
+          const k=it.seed%3;
+          if(k===0){            // gold coin
+            const r=13*it.s*(it.seed%7===0?1.9:1);
+            const g=ctx.createRadialGradient(-r*.3,-r*.3,r*.1,0,0,r);
+            g.addColorStop(0,'#fff0a0');g.addColorStop(.6,'#ffc828');g.addColorStop(1,'#c98100');
+            ctx.fillStyle=g;ctx.strokeStyle='#8a5700';ctx.lineWidth=Math.max(1,r*.12);
+            ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.fill();ctx.stroke();
+            ctx.strokeStyle='rgba(120,70,0,.45)';ctx.lineWidth=Math.max(1,r*.09);ctx.beginPath();ctx.arc(0,0,r*.72,0,Math.PI*2);ctx.stroke();
+            ctx.fillStyle='#7a4607';ctx.font='bold '+(r*1.05)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('$',0,r*.06);
+          }else{                // green bill
+            const ww=36*it.s*(it.seed%5===0?1.7:1),hh=ww*.56;
+            const g=ctx.createLinearGradient(-ww/2,-hh/2,ww/2,hh/2);
+            g.addColorStop(0,'#58c26a');g.addColorStop(1,'#2a8a43');
+            ctx.fillStyle=g;ctx.strokeStyle='#17592a';ctx.lineWidth=Math.max(1,ww*.045);
+            ctx.beginPath();roundedRectPath(ctx,-ww/2,-hh/2,ww,hh,ww*.08);ctx.fill();ctx.stroke();
+            ctx.strokeStyle='rgba(230,255,230,.55)';ctx.lineWidth=Math.max(1,ww*.03);
+            ctx.beginPath();roundedRectPath(ctx,-ww*.42,-hh*.36,ww*.84,hh*.72,ww*.05);ctx.stroke();
+            ctx.fillStyle='rgba(235,255,235,.85)';ctx.beginPath();ctx.arc(0,0,hh*.26,0,Math.PI*2);ctx.fill();
+            ctx.fillStyle='#1d6a33';ctx.font='bold '+(hh*.42)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('$',0,hh*.03);
+          }
         }else{
           // Wide, unmistakable handcuffs with two separated cuffs and a hollow braided-wire bridge.
           const s=1.54*it.s, rx=14.8*s, ry=11.5*s, gap=35*s;
@@ -3847,6 +3947,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
         }
         ctx.restore();
       }
+      ctx.globalAlpha=1;
       resultRainRaf=requestAnimationFrame(frame);
     }
     resultRainResizeHandler=resize;
@@ -3989,6 +4090,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
 
   function setMasterMute(nextMuted){
     isMuted=!!nextMuted;
+    if(isMuted) sirenStop(true);
     updateMuteUi();
     try{
       if(vaultAudio){ vaultAudio.muted=isMuted; if(isMuted){ try{vaultAudio.pause();}catch(_){} } }
