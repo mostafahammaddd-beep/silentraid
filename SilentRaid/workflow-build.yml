@@ -24,11 +24,6 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: gradle/actions/setup-gradle@v6
-        with:
-          gradle-version: '8.13'
-          cache-disabled: true     # الكاش كان ممكن يعلّق خطوة الإعداد/الحفظ
-
       - name: Prepare signing key (from GitHub secrets)
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -46,27 +41,31 @@ jobs:
             echo "::warning::AdMob TEST ids are still in strings.xml - replace them with your own before publishing."
           fi
 
+      - name: Install and verify Gradle 8.13
+        run: |
+          set -euo pipefail
+          GRADLE_VERSION=8.13
+          GRADLE_HOME="$RUNNER_TEMP/gradle-$GRADLE_VERSION"
+          if [ ! -x "$GRADLE_HOME/bin/gradle" ]; then
+            curl -fsSL --retry 3 --retry-all-errors \
+              "https://services.gradle.org/distributions/gradle-$GRADLE_VERSION-bin.zip" \
+              -o "$RUNNER_TEMP/gradle-$GRADLE_VERSION-bin.zip"
+            rm -rf "$GRADLE_HOME"
+            unzip -q "$RUNNER_TEMP/gradle-$GRADLE_VERSION-bin.zip" -d "$RUNNER_TEMP"
+          fi
+          echo "$GRADLE_HOME/bin" >> "$GITHUB_PATH"
+          "$GRADLE_HOME/bin/gradle" --version
+
       - name: Build release APK
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          set -e
-          if gradle --version | grep -q '^Gradle 8\.13'; then
-            GRADLE_CMD=gradle
-          else
-            echo 'Gradle 8.13 was not selected; installing it explicitly.'
-            DIST_DIR="$RUNNER_TEMP/gradle-8.13"
-            if [ ! -x "$DIST_DIR/bin/gradle" ]; then
-              curl -fsSL https://services.gradle.org/distributions/gradle-8.13-bin.zip -o "$RUNNER_TEMP/gradle-8.13-bin.zip"
-              rm -rf "$DIST_DIR"
-              unzip -q "$RUNNER_TEMP/gradle-8.13-bin.zip" -d "$RUNNER_TEMP"
-            fi
-            GRADLE_CMD="$DIST_DIR/bin/gradle"
-          fi
-          "$GRADLE_CMD" --version
-          "$GRADLE_CMD" -p SilentRaid assembleRelease --no-daemon --stacktrace --console=plain
+          set -euo pipefail
+          GRADLE_HOME="$RUNNER_TEMP/gradle-8.13"
+          "$GRADLE_HOME/bin/gradle" --version
+          "$GRADLE_HOME/bin/gradle" -p SilentRaid assembleRelease --no-daemon --stacktrace --console=plain
 
       - uses: actions/upload-artifact@v4
         with:
