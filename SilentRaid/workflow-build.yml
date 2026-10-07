@@ -1,22 +1,23 @@
 name: Build APK
+
 on:
   push:
     branches: [ main, master ]
   workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30          # لو علّق لأي سبب يقفل لوحده ويظهر خطأ بدل ما يفضل يحمّل
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
       - name: Check project layout
+        shell: bash
         run: |
-          if [ ! -f SilentRaid/settings.gradle ]; then
-            echo "::error::مجلد SilentRaid مش في جذر المستودع. الموجود:"
-            find . -maxdepth 3 -not -path './.git*' | head -50
-            exit 1
-          fi
+          set -euo pipefail
+          test -f SilentRaid/settings.gradle
+          echo "Project root: SilentRaid"
           ls -la SilentRaid
 
       - uses: actions/setup-java@v4
@@ -24,11 +25,27 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # IMPORTANT: AGP 8.11.1 requires Gradle 8.13+. Pin the version here
+      # so the runner cannot silently fall back to Ubuntu's Gradle 8.9.
+      - name: Setup Gradle 8.13 (required by AGP 8.11.1)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Verify toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -version
+          gradle --version
+          test "$(gradle --version | awk '/Gradle / {print $2; exit}')" = "8.13"
+
       - name: Prepare signing key (from GitHub secrets)
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
+          set -euo pipefail
+          if [ -n "${KEYSTORE_BASE64:-}" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/keystore.p12"
             echo "KEYSTORE_PATH=$RUNNER_TEMP/keystore.p12" >> "$GITHUB_ENV"
           else
@@ -41,31 +58,16 @@ jobs:
             echo "::warning::AdMob TEST ids are still in strings.xml - replace them with your own before publishing."
           fi
 
-      - name: Install and verify Gradle 8.13
-        run: |
-          set -euo pipefail
-          GRADLE_VERSION=8.13
-          GRADLE_HOME="$RUNNER_TEMP/gradle-$GRADLE_VERSION"
-          if [ ! -x "$GRADLE_HOME/bin/gradle" ]; then
-            curl -fsSL --retry 3 --retry-all-errors \
-              "https://services.gradle.org/distributions/gradle-$GRADLE_VERSION-bin.zip" \
-              -o "$RUNNER_TEMP/gradle-$GRADLE_VERSION-bin.zip"
-            rm -rf "$GRADLE_HOME"
-            unzip -q "$RUNNER_TEMP/gradle-$GRADLE_VERSION-bin.zip" -d "$RUNNER_TEMP"
-          fi
-          echo "$GRADLE_HOME/bin" >> "$GITHUB_PATH"
-          "$GRADLE_HOME/bin/gradle" --version
-
       - name: Build release APK
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        shell: bash
         run: |
           set -euo pipefail
-          GRADLE_HOME="$RUNNER_TEMP/gradle-8.13"
-          "$GRADLE_HOME/bin/gradle" --version
-          "$GRADLE_HOME/bin/gradle" -p SilentRaid assembleRelease --no-daemon --stacktrace --console=plain
+          gradle --version
+          gradle -p SilentRaid assembleRelease --no-daemon --stacktrace --console=plain
 
       - uses: actions/upload-artifact@v4
         with:
