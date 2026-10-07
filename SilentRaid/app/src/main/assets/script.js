@@ -76,10 +76,10 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     down: new Image(),
     up: new Image()
   };
-  thiefEmptyPoses.left.src = 'assets/thief-pose-left.png';
-  thiefEmptyPoses.right.src = 'assets/thief-pose-right.png';
-  thiefEmptyPoses.down.src = 'assets/thief-pose-down.png';
-  thiefEmptyPoses.up.src = 'assets/thief-pose-up.png';
+  thiefEmptyPoses.left.src = 'assets/thief-pose-left.webp';
+  thiefEmptyPoses.right.src = 'assets/thief-pose-right.webp';
+  thiefEmptyPoses.down.src = 'assets/thief-pose-down.webp';
+  thiefEmptyPoses.up.src = 'assets/thief-pose-up.webp';
 
   const thiefLootPoses = {
     left: new Image(),
@@ -87,10 +87,10 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     down: new Image(),
     up: new Image()
   };
-  thiefLootPoses.left.src = 'assets/thief-pose-left-loot.png';
-  thiefLootPoses.right.src = 'assets/thief-pose-right-loot.png';
-  thiefLootPoses.down.src = 'assets/thief-pose-down-loot.png';
-  thiefLootPoses.up.src = 'assets/thief-pose-up-loot.png';
+  thiefLootPoses.left.src = 'assets/thief-pose-left-loot.webp';
+  thiefLootPoses.right.src = 'assets/thief-pose-right-loot.webp';
+  thiefLootPoses.down.src = 'assets/thief-pose-down-loot.webp';
+  thiefLootPoses.up.src = 'assets/thief-pose-up-loot.webp';
 
   const thiefEmptyImg = thiefEmptyPoses.down;
   const thiefLootImg = thiefLootPoses.down;
@@ -1031,7 +1031,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     stageScreen.dataset.stageIndex = String(currentViewingStage);
 
     if(boardImg){
-      boardImg.src = `assets/stage-bg-clean-${currentViewingStage}.jpg`;
+      boardImg.src = `assets/stage-bg-clean-${currentViewingStage}.webp`;
       boardImg.alt = `${meta.name} - ${meta.subtitle}`;
     }
 
@@ -1063,6 +1063,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       dot.classList.toggle('active', Number(dot.dataset.stage) === currentViewingStage);
     });
 
+    renderLevelSelectStars();
     if(prevBtn) prevBtn.classList.toggle('disabled', currentViewingStage <= 1);
     if(nextBtn) nextBtn.classList.toggle('disabled', currentViewingStage >= 5);
   }
@@ -1101,6 +1102,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     const nextWorld=buildMaze(hashSeed(level.stage,level.level,level.turn));
     const pCell=nextWorld.grid.length ? [1,1] : [0,0];
     world=nextWorld;
+    world.spot=createSpotState(world);
     // The full sprite now participates in collision. If the nominal spawn is
     // too close to a ceiling brick, choose the nearest valid floor cell so the
     // thief never begins with his head already inside a wall.
@@ -1124,6 +1126,9 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     // that made older WebViews flicker while entering a round.
     world.backgroundCanvas=null;
     resetRewardState();
+    world.timerStart=Math.max(1,Number(world.timer)||1);
+    initSpotHud();
+    track('level_start',{level_name:levelName(),stage:level.stage,level:level.level});
     world.timerRunning=true;
     isMapFullyLoaded = Array.isArray(world.grid)&&world.grid.length>0&&world.player&&Number.isFinite(world.player.x)&&Number.isFinite(world.player.y)&&world.keys.length===3;
     updateHUD();
@@ -1479,9 +1484,11 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       updateTimer(dt);
       updatePlayerObjectives();
 
+      world.spotSeen={guard:false,camera:false};
       const subsystems=[
         ['camera',()=>updateSecurityCameras(dt,now,actualSpeed)],
         ['guards',()=>updateGuards(dt,now,actualSpeed)],
+        ['spotting',()=>updateDetectionEvents(dt)],
         ['hazards',()=>updateHazards(dt,actualSpeed)],
         ['failure',()=>checkFailureAndSuccess()],
         ['audio',()=>updateAudio(dt)]
@@ -1589,6 +1596,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       const cameraAlarm=(world.alarmUntil||0)>nowSec;
       const insideSense=d<=SENSE_R && clearSight;
       const detectedNow=insideSense || visible || cameraAlarm;
+      if((insideSense||visible) && (world.continueGrace||0)<=0 && world.spotSeen) world.spotSeen.guard=true;
 
       if(g.state!=='CHASE' && detectedNow){
         g.state='CHASE';
@@ -1989,6 +1997,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       const clear=inCone && hasLineOfSight(cam,p);
       if(clear && (world.continueGrace||0)<=0){
         const firstDetection=!cam.trigger;
+        if(world.spotSeen) world.spotSeen.camera=true;
         cam.trigger=1;
         world.alarmUntil=Math.max(world.alarmUntil||0,nowSec+6);
         world.alarmTarget={x:p.x,y:p.y};
@@ -2078,6 +2087,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     if(!btn)return;
     const isTime=pendingRewardPurpose==='time';
     btn.textContent='';
+    const shine=document.createElement('span'); shine.className='reward-shine'; shine.setAttribute('aria-hidden','true'); btn.appendChild(shine);
     const img=document.createElement('img'); img.className='reward-eye'; img.src=REWARD_EYE_SRC; img.alt=''; img.draggable=false;
     const sp=document.createElement('span'); sp.className='reward-label'; sp.textContent=isTime?REWARD_BTN_TEXT_TIME:REWARD_BTN_TEXT_CAUGHT;
     btn.appendChild(img); btn.appendChild(sp);
@@ -2148,13 +2158,19 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     canvas.classList.remove('lockdown');
     pendingRewardPurpose=purpose; rewardAdInFlight=false;
     if(rewardAdTimer){clearTimeout(rewardAdTimer);rewardAdTimer=null;}
+    const spotted=purpose==='spotted';
     const rewardBtn=document.getElementById('rewardContinueBtn');
-    if(rewardBtn){rewardBtn.disabled=false;setRewardBtnReady(rewardBtn);}
+    if(rewardBtn){rewardBtn.classList.remove('sr-hide');rewardBtn.disabled=false;setRewardBtnReady(rewardBtn);}
+    const failScreen=document.getElementById('failureScreen');
+    if(failScreen) failScreen.classList.toggle('is-spotted',spotted);
+    showSpotFailure();
     const failureTitle=document.querySelector('#failureScreen .rs2-title');
     const failureText=document.querySelector('#failureScreen .rs2-sub');
-    if(failureTitle) failureTitle.textContent=purpose==='time'?'انتهى الوقت!':'اتمسكت!';
-    if(failureText) failureText.textContent=purpose==='time'?'انتهى الوقت قبل أن تهرب بالمسروقات.':'أحاط بك رجال الأمن وأُغلقت العملية.';
+    if(failureTitle) failureTitle.textContent=spotted?'انكشف أمرك!':(purpose==='time'?'انتهى الوقت!':'اتمسكت!');
+    if(failureText) failureText.textContent=spotted?'تم رصدك مرات كثيرة':(purpose==='time'?'انتهى الوقت قبل أن تهرب بالمسروقات.':'أحاط بك رجال الأمن وأُغلقت العملية.');
     setState('FAILURE');
+    recordResult(false);
+    haptic([120,70,220]);
     fadeGameOverMusicIn();
   }
 
@@ -2172,6 +2188,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     if(btn) btn.disabled=true;
     // Safety net: if the native side never answers, release the button.
     rewardAdTimer=setTimeout(()=>{rewardAdTimer=null; if(rewardAdInFlight){rewardAdInFlight=false; if(btn){btn.disabled=false;setRewardBtnReady(btn);}}},120000);
+    track('reward_ad_requested',{level_name:levelName(),purpose:pendingRewardPurpose});
     try{ ads.showRewarded(pendingRewardPurpose); }
     catch(e){
       rewardAdInFlight=false;
@@ -2183,10 +2200,19 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     // Reward only once, only for an ad requested by the player, only for the purpose requested.
     if(!pendingRewardPurpose || !rewardAdInFlight || purpose!==pendingRewardPurpose || !world) return;
     const earned=pendingRewardPurpose;
+    track('reward_ad_earned',{level_name:levelName(),purpose:earned});
     resetRewardState(); isGameOver=false;
     canvas.classList.remove('lockdown'); world.lockdown=false; world.timerRunning=true;
     if(earned==='time') world.timer=Math.max(0,Number(world.timer)||0)+REWARD_BONUS_SECONDS; // bonus seconds only when time ran out
     relocateGuardsAfterReward();
+    if(earned==='spotted' && world.spot){
+      // Resume with exactly one sighting left before the mission fails again.
+      const sp=world.spot;
+      sp.count=Math.max(0,sp.limits.failAt-1);
+      sp.stars=starsForSpots(sp.count,sp.limits);
+      sp.exposed=false; sp.unseen=0;
+      initSpotHud();
+    }
     setState('PLAYING');
   };
   window.onNativeRewardAdStatus=function(status){
@@ -2209,6 +2235,229 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   };
   window.onNativeRewardAdFailed=function(){window.onNativeRewardAdStatus('not_ready');};
   window.onNativeRewardAdReady=function(){window.onNativeRewardAdStatus('ready');};
+  const SPOT_W={g:.35,c:.25,e:.15,n:.20,l:.05};
+  const SPOT_REF={guard:3*1.08*(88+6*2)/150,camera:8,exposure:.25,narrowLo:.24,narrowHi:.65,load:.33,scoreLo:.35,scoreHi:.90};
+  // ===== Detection (spotting) + adaptive stars =====
+  // Stars depend ONLY on how many times the thief is spotted by a guard or a
+  // camera. The allowed margins are inferred from the real round that was built.
+  const SPOT_STARS_KEY='silent_raid_stars_v2';
+  const SPOT_REARM_SECONDS=1.0;   // a new spotting needs the thief to stay unseen this long
+  const SPOT_CAMERA_RANGE=150;    // same range the cameras use in updateSecurityCameras
+  const spotLimitCache={};        // per round, per app session: retries keep the same rules
+  function arDigits(v){ return String(v).replace(/\d/g,d=>'٠١٢٣٤٥٦٧٨٩'[Number(d)]); }
+  function spotClamp01(v){ return Math.max(0,Math.min(1,v)); }
+  function bfsPathCells(grid,a,b){
+    const h=grid.length,w=grid[0].length,prev=new Map([[a.join(','),null]]),q=[a];
+    for(let i=0;i<q.length;i++){
+      const [x,y]=q[i];
+      if(x===b[0]&&y===b[1]) break;
+      for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+        const nx=x+dx,ny=y+dy,k=nx+','+ny;
+        if(nx>=0&&ny>=0&&nx<w&&ny<h&&grid[ny][nx]===0&&!prev.has(k)){prev.set(k,[x,y]);q.push([nx,ny]);}
+      }
+    }
+    const out=[]; let cur=prev.has(b.join(','))?b:null;
+    while(cur){ out.push(cur); cur=prev.get(cur.join(',')); }
+    return out.reverse();
+  }
+  // Reads the built round (the global `world` must already be this round).
+  function measureRoundDifficulty(w){
+    const floor=w.floorCells, nF=Math.max(1,floor.length);
+    let narrow=0;
+    for(const [x,y] of floor){
+      let n=0; for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) if(isFloor(x+dx,y+dy)) n++;
+      if(n<=2) narrow++;
+    }
+    const start=[1,1];
+    const vaultCell=(()=>{const g=canvasToGrid(w.vault.x,w.vault.y);return [g.x,g.y];})();
+    const escapeCell=(()=>{const g=canvasToGrid(w.escape.x,w.escape.y);return [g.x,g.y];})();
+    const stops=[start,...w.keyCells,vaultCell,escapeCell];
+    const route=new Map();
+    for(let i=0;i<stops.length-1;i++) for(const c of bfsPathCells(w.grid,stops[i],stops[i+1])) route.set(c.join(','),c);
+    let exposed=0;
+    for(const c of route.values()){
+      const pos=worldToCanvas(w,c[0],c[1]);
+      if(w.cameras.some(cam=>dist(cam,pos)<=SPOT_CAMERA_RANGE && hasLineOfSight(cam,pos))) exposed++;
+    }
+    return {
+      guardPressure:w.guards.length*((Number(w.guardSpeed)||88)/150),
+      cameraCount:w.cameras.length,
+      routeExposure:route.size?exposed/route.size:0,
+      narrowness:narrow/nF,
+      routeLoad:route.size/nF
+    };
+  }
+  // Difficulty -> tolerance 0..1 -> three margins. Harder to avoid detection = more margin.
+  function analyzeRoundDifficulty(w){
+    const m=measureRoundDifficulty(w);
+    const f={
+      g:spotClamp01(m.guardPressure/SPOT_REF.guard),
+      c:spotClamp01(m.cameraCount/SPOT_REF.camera),
+      e:spotClamp01(m.routeExposure/SPOT_REF.exposure),
+      n:spotClamp01((m.narrowness-SPOT_REF.narrowLo)/(SPOT_REF.narrowHi-SPOT_REF.narrowLo)),
+      l:spotClamp01(m.routeLoad/SPOT_REF.load)
+    };
+    const score=SPOT_W.g*f.g+SPOT_W.c*f.c+SPOT_W.e*f.e+SPOT_W.n*f.n+SPOT_W.l*f.l;
+    const tol=spotClamp01((score-SPOT_REF.scoreLo)/(SPOT_REF.scoreHi-SPOT_REF.scoreLo));
+    const loseFirst=1+Math.round(tol*2);            // detections that cost the 1st star
+    const loseSecond=loseFirst+1+Math.round(tol);   // ...the 2nd star
+    const failAt=loseSecond+1+Math.round(tol);      // ...mission failure
+    return {score,tol,measures:m,limits:{loseFirst,loseSecond,failAt}};
+  }
+  function starsForSpots(count,lim){
+    if(count>=lim.failAt) return 0;
+    if(count>=lim.loseSecond) return 1;
+    if(count>=lim.loseFirst) return 2;
+    return 3;
+  }
+  function createSpotState(w){
+    const id=((level.stage-1)*7)+level.level;
+    let info=spotLimitCache[id];
+    if(!info){ info=analyzeRoundDifficulty(w); spotLimitCache[id]=info; }
+    return {count:0,exposed:false,unseen:0,limits:{...info.limits},stars:3,lastSource:null,flash:0};
+  }
+
+  // ---- Stats, stars and haptics (all stored locally) ----
+  const STATS_KEY='silent_raid_stats_v1';
+  function readJson(key,def){ try{ const v=JSON.parse(localStorage.getItem(key)||'null'); return (v&&typeof v==='object')?v:def; }catch(_){ return def; } }
+  function writeJson(key,v){ try{ localStorage.setItem(key,JSON.stringify(v)); }catch(_){} }
+  // Analytics (Firebase via the native bridge). Silent no-op in a normal browser or when Firebase is not configured.
+  function track(name,params){ try{ const a=window.SilentRaidAnalytics; if(a&&typeof a.logEvent==='function') a.logEvent(String(name),JSON.stringify(params||{})); }catch(_){} }
+  function levelName(){ try{ return 's'+level.stage+'_l'+level.level; }catch(_){ return 'unknown'; } }
+  function haptic(pattern){ try{ if(navigator.vibrate) navigator.vibrate(pattern); }catch(_){} }
+  // ---- Stars: saved best result per round, star markup, HUD and result UI ----
+  const SR_STAR_PATH='M32.0 5.0 L39.4 23.8 L59.6 25.0 L44.0 37.9 L49.0 57.5 L32.0 46.6 L15.0 57.5 L20.0 37.9 L4.4 25.0 L24.6 23.8 Z';
+  function srStarHtml(on,i,shards){
+    const sh=shards?[0,60,120,180,240,300].map(a=>`<i style="--a:${a}deg"></i>`).join(''):'';
+    return `<span class="sr-star ${on?'on':'off'}" style="--i:${i}"><svg viewBox="0 0 64 64" aria-hidden="true"><path class="sr-star-off" d="${SR_STAR_PATH}"/><path class="sr-star-on" d="${SR_STAR_PATH}"/></svg>${sh}</span>`;
+  }
+  function srStarsRow(n,shards){ return [1,2,3].map(i=>srStarHtml(i<=n,i,shards)).join(''); }
+  function readStarRecords(){
+    const raw=readJson(SPOT_STARS_KEY,{}), out={};
+    for(const k of Object.keys(raw)){
+      const v=raw[k]; const st=Number(v&&v.s)||0;
+      if(st>=1&&st<=3) out[k]={s:st,d:Math.max(0,Math.floor(Number(v.d)||0))};
+    }
+    return out;
+  }
+  function isBetterResult(next,prev){
+    if(!prev) return true;
+    return next.s>prev.s || (next.s===prev.s && next.d<prev.d);
+  }
+  function recordResult(won){
+    const st=readJson(STATS_KEY,{wins:0,losses:0,bestTime:{}});
+    if(!st.bestTime||typeof st.bestTime!=='object') st.bestTime={};
+    const sp=world?.spot;
+    const spots=sp?sp.count:0;
+    let stars=0, newBest=false;
+    if(won){
+      st.wins=(st.wins||0)+1;
+      stars=Math.max(1,starsForSpots(spots,sp?sp.limits:{loseFirst:1,loseSecond:2,failAt:3}));
+      const id=((level.stage-1)*7)+level.level;
+      const all=readStarRecords();
+      const prev=all[id], next={s:stars,d:spots};
+      if(isBetterResult(next,prev)){ newBest=!!prev; all[id]=next; writeJson(SPOT_STARS_KEY,all); }
+      const used=Math.round((Number(world.timerStart)||0)-(Number(world.timer)||0));
+      if(!st.bestTime[id]||used<st.bestTime[id]) st.bestTime[id]=used;
+    }else st.losses=(st.losses||0)+1;
+    writeJson(STATS_KEY,st);
+    track('level_end',{level_name:levelName(),stage:level.stage,level:level.level,success:won?1:0,stars,spots,
+      duration_s:Math.max(0,Math.round((Number(world?.timerStart)||0)-(Number(world?.timer)||0)))});
+    return {stars,spots,newBest};
+  }
+  function spotResultText(stars,spots){
+    if(stars>=3) return spots===0?'تنفيذ مثالي — لم يرصدك أحد':'عمل رائع — بقيت ضمن الحد المسموح للرصد';
+    if(stars===2) return 'تم فقدان نجمة بسبب زيادة مرات الرصد.';
+    return 'تم فقدان نجمتين بسبب زيادة مرات الرصد.';
+  }
+  function showStars(result){
+    const row=document.getElementById('rsStars'); if(!row) return;
+    row.classList.toggle('perfect',result.stars>=3);
+    row.setAttribute('aria-label',`النجوم: ${arDigits(result.stars)} من ٣`);
+    row.innerHTML=srStarsRow(result.stars,false)+(result.stars>=3?'<span class="sr-burst" aria-hidden="true">'+[0,36,72,108,144,180,216,252,288,324].map(a=>`<i style="--a:${a}deg"></i>`).join('')+'</span>':'');
+    const cnt=document.getElementById('rsSpotCount');
+    if(cnt) cnt.innerHTML=`<span>مرات الرصد: ${arDigits(result.spots)}</span>`+(result.newBest?'<em class="rs2-newbest">أفضل نتيجة جديدة!</em>':'');
+    const msg=document.getElementById('rsMessage');
+    if(msg) msg.textContent=spotResultText(result.stars,result.spots);
+  }
+  function showSpotFailure(){
+    const sp=world?.spot; if(!sp) return;
+    const row=document.getElementById('failStars'); if(row) row.innerHTML=srStarsRow(0,false); // any lost round (caught, spotted too often, time) shows zero stars
+    const cnt=document.getElementById('failSpotCount');
+    if(cnt) cnt.textContent=`مرات الرصد: ${arDigits(sp.count)} / ${arDigits(sp.limits.failAt)}`;
+  }
+  function totalStars(){ return Object.values(readStarRecords()).reduce((a,b)=>a+(Number(b.s)||0),0); }
+  window.SilentRaidStats={totalStars,read:()=>readJson(STATS_KEY,{}),stars:()=>{const r=readStarRecords(),o={};for(const k of Object.keys(r))o[k]=r[k].s;return o;}};
+
+  // ---- In-round detection events + stars HUD ----
+  function updateDetectionEvents(dt){
+    const sp=world?.spot; if(!sp||isGameOver) return;
+    const seen=world.spotSeen||{};
+    if(seen.guard||seen.camera){
+      sp.unseen=0;
+      if(!sp.exposed){ sp.exposed=true; registerDetection(seen.guard?'guard':'camera'); }
+    }else if(sp.exposed){
+      sp.unseen+=dt;
+      if(sp.unseen>=SPOT_REARM_SECONDS){ sp.exposed=false; sp.unseen=0; }
+    }
+  }
+  function registerDetection(source){
+    const sp=world.spot, before=sp.stars;
+    sp.count++; sp.lastSource=source;
+    sp.stars=starsForSpots(sp.count,sp.limits);
+    track('spotted',{level_name:levelName(),source,count:sp.count,stars:sp.stars});
+    animateSpotHud(source,before,sp.stars);
+    haptic(35);
+    if(sp.count>=sp.limits.failAt) fail('تم رصدك مرات كثيرة','spotted');
+  }
+  function initSpotHud(){
+    const el=document.getElementById('spotHud'); if(!el||!world?.spot) return;
+    clearTimeout(el._t);
+    el.classList.remove('hit','hit-loss');
+    const stars=el.querySelector('.spot-hud-stars'); if(stars) stars.innerHTML=srStarsRow(world.spot.stars,true);
+    renderSpotCount();
+  }
+  function renderSpotCount(){
+    const el=document.getElementById('spotHud'), sp=world?.spot; if(!el||!sp) return;
+    const c=el.querySelector('.spot-hud-count');
+    const text=`الرصد: ${arDigits(sp.count)} / ${arDigits(sp.limits.failAt)}`;
+    if(c) c.textContent=text;
+    el.setAttribute('aria-label',`${text} — النجوم: ${arDigits(sp.stars)} من ٣`);
+  }
+  function animateSpotHud(source,before,after){
+    const el=document.getElementById('spotHud'); if(!el) return;
+    renderSpotCount();
+    const spans=el.querySelectorAll('.spot-hud-stars .sr-star');
+    for(let i=before;i>after;i--){
+      const sp=spans[i-1]; if(!sp) continue;
+      sp.classList.remove('on'); sp.classList.add('off','lost');
+      setTimeout(()=>sp.classList.remove('lost'),950);
+    }
+    const lost=before>after;
+    const flash=el.querySelector('.spot-hud-flash');
+    if(flash) flash.textContent=(source==='camera'?'رصدتك الكاميرا':'رصدك الحارس')+(lost?' — خسرت نجمة':'');
+    el.classList.remove('hit','hit-loss'); void el.offsetWidth;
+    el.classList.add('hit'); if(lost) el.classList.add('hit-loss');
+    clearTimeout(el._t);
+    el._t=setTimeout(()=>el.classList.remove('hit','hit-loss'),1700);
+  }
+  function renderLevelSelectStars(){
+    const rec=readStarRecords();
+    document.querySelectorAll('#stageCardsTrack .stage-round-card').forEach(card=>{
+      const r=Number(card.dataset.round)||0; if(r<1||r>7) return;
+      const plaque=card.querySelector('.card-plaque'); if(!plaque) return;
+      let box=card.querySelector('.card-stars');
+      if(!box){ box=document.createElement('div'); box.className='card-stars'; plaque.appendChild(box); }
+      const id=((currentViewingStage-1)*7)+r;
+      const best=rec[id]?rec[id].s:0;
+      box.innerHTML=srStarsRow(best,false);
+      const spots=rec[id]?rec[id].d:null;
+      card.setAttribute('aria-label',`الدور ${arDigits(r)} — ${best?`أفضل نتيجة: ${arDigits(best)} من ٣ نجوم، مرات الرصد: ${arDigits(spots)}`:'لم يُلعب بعد'}`);
+    });
+    const tot=document.getElementById('lsTotalText');
+    if(tot) tot.textContent=`${arDigits(totalStars())} / ${arDigits(TOTAL_LEVELS*3)}`;
+  }
+
   function succeed(){
     if(!isMapFullyLoaded||isGameOver)return;
     stopResultMusicNow();
@@ -2226,10 +2475,13 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       }
     }catch(_){ }
     markRoundCompleted(level.stage,level.level);
+    const result=recordResult(true);
     // Keep the success SFX aligned with the result transition.
     setTimeout(()=>{
       if(!isGameOver)return;
       setState('SUCCESS');
+      showStars(result);
+      haptic([40,40,90]);
       startResultRain('money');
       fadeResultMusicIn();
     },1000);
@@ -3457,6 +3709,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   function sirenStop(fast){
     loseClearTimers();
     loseHornPlays=LOSE_HORN_REPLAYS;   // block any pending replay
+    loseWaStopAll(!!fast);
     if(sirenFadeTimer){clearInterval(sirenFadeTimer);sirenFadeTimer=0;}
     const els=[loseSfxEl,loseHornEl].filter(el=>el&&!el.paused);
     if(!els.length)return;
@@ -3476,12 +3729,37 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     if(!loseSfxEl){ loseSfxEl=new Audio('assets/you-lose.mp3'); loseSfxEl.preload='auto'; loseSfxEl.loop=false; }
     if(!loseHornEl){ loseHornEl=new Audio('assets/losing-horn.mp3'); loseHornEl.preload='auto'; loseHornEl.loop=false; }
   }
+  // Web Audio path: pre-decoded buffers = both sounds start on the exact same sample, no HTMLAudio latency.
+  // Falls back to the HTMLAudio elements above when the buffers are not decoded yet.
+  var loseSfxBuf=null, loseHornBuf=null;
+  let loseWaNodes=[];
+  function loseWaReady(){ return !!(audio && audio.ac && audio.ac.state==='running' && loseSfxBuf && loseHornBuf); }
+  function loseWaPlay(buf,vol,offset,onEnd){
+    const ac=audio.ac, src=ac.createBufferSource(), gn=ac.createGain();
+    src.buffer=buf; gn.gain.value=vol;
+    src.connect(gn).connect(audio.sfxBus||ac.destination);
+    const node={src,gn,dead:false};
+    src.onended=()=>{ node.dead=true; try{src.disconnect();gn.disconnect();}catch(_){} if(onEnd) onEnd(); };
+    loseWaNodes.push(node);
+    return {node,start:(when)=>src.start(when,offset||0)};
+  }
+  function loseWaStopAll(fast){
+    const nodes=loseWaNodes; loseWaNodes=[];
+    nodes.forEach(n=>{ if(n.dead) return; n.src.onended=null;
+      try{
+        if(fast||!audio||!audio.ac){ n.src.stop(); }
+        else{ const t=audio.ac.currentTime; n.gn.gain.setValueAtTime(n.gn.gain.value,t); n.gn.gain.linearRampToValueAtTime(0,t+.5); n.src.stop(t+.52); }
+      }catch(_){} });
+  }
   let loseSfxDone=false, loseHornDone=false;
   function loseMaybeReplayHorn(){
     // runs when the mix has fully finished (both files ended) -> horn alone again
     if(!(loseSfxDone && loseHornDone)) return;
     if(!loseActive() || loseHornPlays>=LOSE_HORN_REPLAYS) return;
     loseHornPlays++;
+    if(loseWaReady()){
+      try{ const h=loseWaPlay(loseHornBuf,LOSE_HORN_SOLO_VOLUME,0.3,null); h.start(audio.ac.currentTime+0.01); return; }catch(err){ console.warn('horn replay (WA) failed',err); }
+    }
     try{
       loseHornEl.muted=isMuted; loseHornEl.volume=LOSE_HORN_SOLO_VOLUME;
       try{ loseHornEl.currentTime=0; }catch(_){}
@@ -3491,6 +3769,16 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   }
   function loseStartMix(){
     if(!loseActive()) return;
+    if(loseWaReady()){
+      try{
+        loseSfxDone=false; loseHornDone=false; loseHornPlays=0;
+        const a=loseWaPlay(loseSfxBuf,LOSE_SFX_VOLUME,0,()=>{ loseSfxDone=true; loseMaybeReplayHorn(); });
+        const b=loseWaPlay(loseHornBuf,LOSE_HORN_VOLUME,0,()=>{ loseHornDone=true; loseMaybeReplayHorn(); });
+        const t0=audio.ac.currentTime+0.02;     // same start time for both -> perfectly in sync
+        a.start(t0); b.start(t0);
+        return;
+      }catch(err){ console.warn('lose mix (WA) failed, using HTMLAudio',err); loseWaStopAll(true); }
+    }
     try{
       loseEnsure();
       loseSfxDone=false; loseHornDone=false; loseHornPlays=0;
@@ -3511,7 +3799,6 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     loseTimers.push(setTimeout(loseStartMix,LOSE_SFX_DELAY_MS));
   }
 
-  function ensureGameOverMusic(){ return null; }   // old game-over track removed (siren instead)
 
   function fadeGameOverMusicIn(){
     // the sequence timers (1s "you lose" -> 4s horn) are counted from the moment the failure screen appears
@@ -3594,7 +3881,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     }catch(_){}
   }
 
-  let vaultBuffer = null, escapeBuffer = null;
+  let vaultBuffer = null, escapeBuffer = null;   // (loseSfxBuf / loseHornBuf are declared with the failure audio block)
   function preloadAudioBuffers(){
     if(!audio || !audio.ac) return;
     try{
@@ -3612,6 +3899,8 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       };
       loadBuf('assets/vault-open.mp3',b=>{ vaultBuffer=b; });
       loadBuf('assets/escape-run.mp3',b=>{ escapeBuffer=b; });
+      loadBuf('assets/you-lose.mp3',b=>{ loseSfxBuf=b; });
+      loadBuf('assets/losing-horn.mp3',b=>{ loseHornBuf=b; });
     }catch(_){}
   }
 
@@ -3878,28 +4167,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
           continue;
         }
         ctx.save();ctx.translate(it.x,it.y);ctx.rotate(it.rot);ctx.globalAlpha=alpha;
-        if(false){
-          const k=it.seed%3;
-          if(k===0){            // gold coin
-            const r=13*it.s*(it.seed%7===0?1.9:1);
-            const g=ctx.createRadialGradient(-r*.3,-r*.3,r*.1,0,0,r);
-            g.addColorStop(0,'#fff0a0');g.addColorStop(.6,'#ffc828');g.addColorStop(1,'#c98100');
-            ctx.fillStyle=g;ctx.strokeStyle='#8a5700';ctx.lineWidth=Math.max(1,r*.12);
-            ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.fill();ctx.stroke();
-            ctx.strokeStyle='rgba(120,70,0,.45)';ctx.lineWidth=Math.max(1,r*.09);ctx.beginPath();ctx.arc(0,0,r*.72,0,Math.PI*2);ctx.stroke();
-            ctx.fillStyle='#7a4607';ctx.font='bold '+(r*1.05)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('$',0,r*.06);
-          }else{                // green bill
-            const ww=36*it.s*(it.seed%5===0?1.7:1),hh=ww*.56;
-            const g=ctx.createLinearGradient(-ww/2,-hh/2,ww/2,hh/2);
-            g.addColorStop(0,'#58c26a');g.addColorStop(1,'#2a8a43');
-            ctx.fillStyle=g;ctx.strokeStyle='#17592a';ctx.lineWidth=Math.max(1,ww*.045);
-            ctx.beginPath();roundedRectPath(ctx,-ww/2,-hh/2,ww,hh,ww*.08);ctx.fill();ctx.stroke();
-            ctx.strokeStyle='rgba(230,255,230,.55)';ctx.lineWidth=Math.max(1,ww*.03);
-            ctx.beginPath();roundedRectPath(ctx,-ww*.42,-hh*.36,ww*.84,hh*.72,ww*.05);ctx.stroke();
-            ctx.fillStyle='rgba(235,255,235,.85)';ctx.beginPath();ctx.arc(0,0,hh*.26,0,Math.PI*2);ctx.fill();
-            ctx.fillStyle='#1d6a33';ctx.font='bold '+(hh*.42)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('$',0,hh*.03);
-          }
-        }else{
+        {
           // Wide, unmistakable handcuffs with two separated cuffs and a hollow braided-wire bridge.
           const s=1.54*it.s, rx=14.8*s, ry=11.5*s, gap=35*s;
           const metal='#c9d2d7', dark='#66717a', hi='#f1f5f6';

@@ -6,17 +6,25 @@ import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageInfo;
 import android.graphics.Color;
+import android.graphics.Insets;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.os.Build;
+import org.json.JSONObject;
+import java.util.Iterator;
+import com.google.firebase.analytics.FirebaseAnalytics;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.view.View;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.view.Window;
 import android.view.WindowManager;
+import android.window.OnBackInvokedCallback;
+import android.window.OnBackInvokedDispatcher;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
@@ -25,6 +33,7 @@ import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 
 import com.google.android.gms.ads.AdError;
 import com.google.android.gms.ads.AdRequest;
@@ -106,6 +115,14 @@ public class MainActivity extends Activity {
 
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
+        // Android 15/16 enforce edge-to-edge: keep the game clear of display cutouts (notch / punch-hole).
+        root.setOnApplyWindowInsetsListener((v, insets) -> {
+            if (Build.VERSION.SDK_INT >= 30) {
+                Insets cut = insets.getInsets(WindowInsets.Type.displayCutout());
+                v.setPadding(cut.left, cut.top, cut.right, cut.bottom);
+            }
+            return insets;
+        });
 
         mWebView = new WebView(this);
         mWebView.setBackgroundColor(Color.BLACK);
@@ -147,11 +164,13 @@ public class MainActivity extends Activity {
 
         mWebView.addJavascriptInterface(new SilentRaidDeviceBridge(compatibilityRenderer), "SilentRaidDevice");
         mWebView.addJavascriptInterface(new SilentRaidAdsBridge(this), "SilentRaidAds");
+        mWebView.addJavascriptInterface(new SilentRaidAnalyticsBridge(getApplicationContext()), "SilentRaidAnalytics");
 
         root.addView(mWebView, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
         setContentView(root);
         applyImmersiveSticky();
+        if (Build.VERSION.SDK_INT >= 33) registerBackCallback();
 
         mWebView.loadUrl("file:///android_asset/index.html");
 
@@ -213,9 +232,12 @@ public class MainActivity extends Activity {
         if (hasFocus) applyImmersiveSticky();
     }
 
-    @Override
-    public void onBackPressed() {
-        new AlertDialog.Builder(this)
+    private AlertDialog exitDialog;
+
+    private void showExitDialog() {
+        if (destroyed || isFinishing()) return;
+        if (exitDialog != null && exitDialog.isShowing()) return;
+        exitDialog = new AlertDialog.Builder(this)
                 .setTitle(R.string.exit_title)
                 .setMessage(R.string.exit_message)
                 .setPositiveButton(R.string.exit_yes, (dialog, which) -> finish())
@@ -226,8 +248,31 @@ public class MainActivity extends Activity {
                 .show();
     }
 
+    /** Android 13+ : back gestures/buttons are delivered here (onBackPressed is NOT called when targeting API 36). */
+    @RequiresApi(33)
+    private void registerBackCallback() {
+        OnBackInvokedCallback cb = this::showExitDialog;
+        getOnBackInvokedDispatcher().registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, cb);
+    }
+
+    /** Android 12 and older. */
+    @Override
+    @SuppressWarnings("deprecation")
+    public void onBackPressed() {
+        showExitDialog();
+    }
+
     @SuppressWarnings("deprecation")
     private void applyImmersiveSticky() {
+        if (Build.VERSION.SDK_INT >= 30) {
+            getWindow().setDecorFitsSystemWindows(false);
+            WindowInsetsController c = getWindow().getInsetsController();
+            if (c != null) {
+                c.hide(WindowInsets.Type.systemBars());
+                c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            }
+            return;
+        }
         getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                         | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
@@ -504,6 +549,57 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void showRewarded(final String purpose) {
             mActivity.mHandler.post(() -> mActivity.onRewardAdRequested(purpose));
+        }
+    }
+
+    /** JS -> Firebase Analytics. Never crashes the game: if Firebase is not configured, calls are ignored. */
+    static class SilentRaidAnalyticsBridge {
+        private final Context mContext;
+        private FirebaseAnalytics mAnalytics;
+        private boolean mUnavailable = false;
+
+        SilentRaidAnalyticsBridge(Context context) { this.mContext = context; }
+
+        private FirebaseAnalytics get() {
+            if (mUnavailable) return null;
+            if (mAnalytics == null) {
+                try { mAnalytics = FirebaseAnalytics.getInstance(mContext); }
+                catch (Throwable t) { mUnavailable = true; Log.w("SilentRaid", "Firebase not configured; analytics disabled"); return null; }
+            }
+            return mAnalytics;
+        }
+
+        @JavascriptInterface
+        public void logEvent(String name, String paramsJson) {
+            try {
+                if (name == null || !name.matches("[A-Za-z][A-Za-z0-9_]{0,39}")) return;
+                FirebaseAnalytics fa = get();
+                if (fa == null) return;
+                Bundle b = new Bundle();
+                if (paramsJson != null && !paramsJson.isEmpty()) {
+                    JSONObject o = new JSONObject(paramsJson);
+                    Iterator<String> it = o.keys();
+                    int n = 0;
+                    while (it.hasNext() && n < 20) {
+                        String k = it.next();
+                        if (!k.matches("[A-Za-z][A-Za-z0-9_]{0,39}")) continue;
+                        Object v = o.get(k);
+                        if (v instanceof Number) {
+                            double d = ((Number) v).doubleValue();
+                            if (d == Math.rint(d) && Math.abs(d) < 1e15) b.putLong(k, (long) d); else b.putDouble(k, d);
+                        } else if (v instanceof Boolean) {
+                            b.putLong(k, ((Boolean) v) ? 1L : 0L);
+                        } else {
+                            String sv = String.valueOf(v);
+                            b.putString(k, sv.length() > 100 ? sv.substring(0, 100) : sv);
+                        }
+                        n++;
+                    }
+                }
+                fa.logEvent(name, b);
+            } catch (Throwable t) {
+                Log.w("SilentRaid", "logEvent failed: " + t);
+            }
         }
     }
 

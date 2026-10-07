@@ -2813,7 +2813,7 @@ h1,
 }
 
 .heist-menu .heist-hero-art {
-  content: url("assets/silent-raid-cartoon-hero.png");
+  content: url("assets/silent-raid-cartoon-hero.webp");
   filter: saturate(.94) contrast(1.05) brightness(.9)
 }
 
@@ -6821,7 +6821,7 @@ body.gameplay-fullscreen #gameScreen {
 #menuScreen .menu-backdrop {
   position: absolute !important;
   inset: 0 !important;
-  background: url("assets/menu-bank-bg.jpg") center center / cover no-repeat !important;
+  background: url("assets/menu-bank-bg.webp") center center / cover no-repeat !important;
   z-index: 1 !important;
   filter: brightness(1.27) contrast(1.08) !important;
 }
@@ -8607,7 +8607,7 @@ body.gameplay-fullscreen #gameScreen #gameCanvas {
 .rs2-chains{position:absolute;inset:0;overflow:hidden;--chain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 240'%3E%3Cdefs%3E%3ClinearGradient id='m' x1='0' x2='1'%3E%3Cstop offset='0' stop-color='%23dfe3ea'/%3E%3Cstop offset='.35' stop-color='%23939aa8'/%3E%3Cstop offset='.72' stop-color='%23585e6c'/%3E%3Cstop offset='1' stop-color='%2330343f'/%3E%3C/linearGradient%3E%3ClinearGradient id='ms' x1='0' x2='1'%3E%3Cstop offset='0' stop-color='%238b919e'/%3E%3Cstop offset='.5' stop-color='%23e4e7ee'/%3E%3Cstop offset='1' stop-color='%23454b57'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='36' y='96' width='28' height='168' rx='14' fill='none' stroke='%2312060a' stroke-width='17'/%3E%3Crect x='36' y='96' width='28' height='168' rx='14' fill='none' stroke='url(%23ms)' stroke-width='12'/%3E%3Crect x='36' y='96' width='28' height='168' rx='14' fill='none' stroke='%23f2f4f8' stroke-opacity='.5' stroke-width='3' transform='translate(-3 0)'/%3E%3Crect x='36' y='96' width='28' height='168' rx='14' fill='none' stroke='%23ff4635' stroke-opacity='0.4' stroke-width='3.5' transform='translate(5 0)'/%3E%3Crect x='36' y='-144' width='28' height='168' rx='14' fill='none' stroke='%2312060a' stroke-width='17'/%3E%3Crect x='36' y='-144' width='28' height='168' rx='14' fill='none' stroke='url(%23ms)' stroke-width='12'/%3E%3Crect x='36' y='-144' width='28' height='168' rx='14' fill='none' stroke='%23f2f4f8' stroke-opacity='.5' stroke-width='3' transform='translate(-3 0)'/%3E%3Crect x='36' y='-144' width='28' height='168' rx='14' fill='none' stroke='%23ff4635' stroke-opacity='0.4' stroke-width='3.5' transform='translate(5 0)'/%3E%3Crect x='15' y='6' width='70' height='132' rx='33' fill='none' stroke='%2312060a' stroke-width='23'/%3E%3Crect x='15' y='6' width='70' height='132' rx='33' fill='none' stroke='url(%23m)' stroke-width='17'/%3E%3Crect x='15' y='6' width='70' height='132' rx='33' fill='none' stroke='%23f2f4f8' stroke-opacity='.5' stroke-width='3' transform='translate(-4 -1)'/%3E%3Crect x='15' y='6' width='70' height='132' rx='33' fill='none' stroke='%23ff4635' stroke-opacity='0.5' stroke-width='3.5' transform='translate(6 2)'/%3E%3C/svg%3E")}
 .rs2 .chain-wrap{position:absolute;top:-35%;height:170%;left:var(--x);width:var(--w);transform:rotate(var(--rot,0deg));opacity:var(--o,1);filter:blur(var(--b,0px))}
 .rs2 .chain{position:absolute;left:0;right:0;top:calc(var(--w) * -2.4);height:calc(100% + var(--w) * 2.4);background-image:var(--chain);background-repeat:repeat-y;background-size:100% auto;animation:chainFall var(--dur,11s) linear infinite;will-change:transform}
-@keyframes chainFall{from{transform:translateY(0)}to{transform:translateY(calc(var(--w) * 2.4))}}
+
 
 /* ---------- win: bag + background ---------- */
 .rs2-win .rs2-bg{background:radial-gradient(ellipse 80% 90% at 50% 28%,#14698c 0%,#0b3352 38%,#050d1a 100%)}
@@ -8619,7 +8619,7 @@ body.gameplay-fullscreen #gameScreen #gameCanvas {
 .rs2-bag-rays,.rs2-bag-halo{position:absolute;left:50%;pointer-events:none}
 .rs2-bag-rays{top:56%;width:70em;height:70em;margin:-35em 0 0 -35em;z-index:1;background:repeating-conic-gradient(from 0deg at 50% 50%,rgba(255,214,90,.34) 0 4deg,transparent 4deg 15deg);-webkit-mask-image:radial-gradient(closest-side,#000 6%,transparent 82%);mask-image:radial-gradient(closest-side,#000 6%,transparent 82%);animation:raysSpin 38s linear infinite}
 .rs2-bag-halo{top:52%;width:26em;height:26em;margin:-13em 0 0 -13em;z-index:1;background:radial-gradient(closest-side,rgba(255,215,90,.9),rgba(255,190,40,.3) 55%,transparent 100%);animation:bagGlow 3.2s ease-in-out infinite}
-@keyframes bagFloat{0%,100%{transform:translateY(0) rotate(-2.2deg) scale(1)}50%{transform:translateY(-.8em) rotate(2.2deg) scale(1.045)}}
+
 @keyframes bagGlow{0%,100%{opacity:.55;transform:scale(.94)}50%{opacity:1;transform:scale(1.08)}}
 @keyframes raysSpin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.rs2 *{animation:none !important}}
@@ -8650,3 +8650,120 @@ body.gameplay-fullscreen #gameScreen #gameCanvas {
 @keyframes bagFloat{0%,100%{transform:translate3d(0,0,0) rotate(-1.6deg)}50%{transform:translate3d(0,-.8em,0) rotate(1.6deg)}}
 .bag-spark{transform-box:fill-box;transform-origin:center;opacity:0;animation:bagSpark 2.4s ease-in-out infinite;animation-delay:var(--sd,0s)}
 @keyframes bagSpark{0%,100%{opacity:0;transform:scale(.3) rotate(0deg)}50%{opacity:1;transform:scale(1) rotate(45deg)}}
+
+/* ===== stars (detection system) — see bottom of file ===== */
+.rs2-newbest{font-style:normal;font-size:.36em;font-weight:800;color:#ffe9a0;margin:0 .9em;white-space:nowrap;font-family:'Cairo',sans-serif;text-shadow:0 .1em .3em rgba(0,0,0,.6);direction:rtl}
+
+
+/* ============================================================
+   DETECTION + STARS SYSTEM (Arabic UI)
+   ============================================================ */
+.sr-defs{position:absolute;width:0;height:0;overflow:hidden;pointer-events:none}
+
+/* ---- star atom ---- */
+.sr-star{position:relative;display:inline-block;width:1em;height:1em;line-height:0;flex:none}
+.sr-star svg{width:100%;height:100%;display:block;overflow:visible;transition:transform .3s cubic-bezier(.2,1.4,.4,1)}
+.sr-star .sr-star-off{fill:rgba(255,255,255,.07);stroke:rgba(255,255,255,.32);stroke-width:3.2;stroke-linejoin:round}
+.sr-star .sr-star-on{fill:url(#srGold);stroke:#7a3f00;stroke-width:3.6;stroke-linejoin:round;opacity:0;transition:opacity .25s ease}
+.sr-star.on .sr-star-on{opacity:1}
+.sr-star.on svg{filter:drop-shadow(0 0 .22em rgba(255,190,30,.75))}
+.sr-star i{position:absolute;left:50%;top:50%;width:.14em;height:.14em;margin:-.07em 0 0 -.07em;border-radius:20%;background:#ffd25a;opacity:0;pointer-events:none}
+.sr-star.lost{animation:srLoseStar .9s cubic-bezier(.3,.7,.3,1)}
+.sr-star.lost .sr-star-on{opacity:0;animation:srLoseFill .9s ease forwards}
+.sr-star.lost i{animation:srShard .75s ease-out forwards}
+@keyframes srLoseStar{0%{transform:scale(1) rotate(0)}22%{transform:scale(1.5) rotate(-16deg)}45%{transform:scale(.85) rotate(10deg)}70%{transform:scale(1.05) rotate(-4deg)}100%{transform:scale(1) rotate(0)}}
+@keyframes srLoseFill{0%{opacity:1;filter:none}35%{opacity:1;filter:hue-rotate(-40deg) saturate(2.4) brightness(1.1)}100%{opacity:0;filter:hue-rotate(-40deg) saturate(2.4)}}
+@keyframes srShard{0%{opacity:1;transform:rotate(var(--a)) translateY(0) scale(1);background:#ff6a4a}100%{opacity:0;transform:rotate(var(--a)) translateY(-1.1em) scale(.3)}}
+
+/* ---- in-round HUD pill (matches the keys pill) ---- */
+.spot-hud{position:relative;display:inline-flex !important;align-items:center;gap:7px;padding:4px 10px;border-radius:999px;
+  background:linear-gradient(180deg,rgba(42,28,12,.78),rgba(16,10,6,.72));border:1.5px solid rgba(232,176,92,.5);
+  box-shadow:0 4px 10px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,220,150,.22);font-family:"Changa","Cairo",sans-serif;direction:rtl;
+  transition:border-color .25s ease,box-shadow .25s ease}
+.spot-hud-stars{display:inline-flex;align-items:center;gap:3px;direction:ltr;font-size:1.55em}
+.spot-hud-count{color:#ffe7b0;font-weight:800;font-size:.86em;white-space:nowrap}
+.spot-hud-flash{position:absolute;top:calc(100% + 6px);left:50%;transform:translate(-50%,-4px);white-space:nowrap;padding:2px 12px;border-radius:999px;
+  background:rgba(150,16,24,.92);border:1px solid rgba(255,140,120,.7);color:#fff;font-size:.8em;font-weight:800;opacity:0;pointer-events:none;
+  transition:opacity .2s ease,transform .2s ease;text-shadow:0 1px 2px #000}
+.spot-hud.hit{border-color:#ffb347;box-shadow:0 0 14px rgba(255,170,60,.65),0 4px 10px rgba(0,0,0,.35);animation:srHudPulse .5s ease}
+.spot-hud.hit-loss{border-color:#ff4d4d;box-shadow:0 0 16px rgba(255,60,60,.8),0 4px 10px rgba(0,0,0,.35)}
+.spot-hud.hit .spot-hud-flash{opacity:1;transform:translate(-50%,0)}
+@keyframes srHudPulse{0%{transform:scale(1)}30%{transform:scale(1.07)}100%{transform:scale(1)}}
+#app[data-stage-theme="silver"] .spot-hud{background:linear-gradient(180deg,rgba(28,40,52,.8),rgba(10,16,22,.72));border-color:rgba(186,210,226,.5)}
+#app[data-stage-theme="gold"] .spot-hud{background:linear-gradient(180deg,rgba(48,34,8,.82),rgba(18,12,4,.72));border-color:rgba(250,204,21,.55)}
+#app[data-stage-theme="diamond"] .spot-hud{background:linear-gradient(180deg,rgba(10,36,54,.82),rgba(6,14,22,.72));border-color:rgba(56,189,248,.5)}
+#app[data-stage-theme="mythic"] .spot-hud{background:linear-gradient(180deg,rgba(42,16,48,.82),rgba(14,6,16,.72));border-color:rgba(192,132,252,.5)}
+#app .spot-hud.hit{border-color:#ffb347}
+#app .spot-hud.hit-loss{border-color:#ff4d4d}
+
+/* ---- win screen: dedicated star zone ---- */
+#successScreen .rs2-stage{height:47em;margin-top:-23.5em;font-size:min(.97vw,1.76vh)}
+#successScreen.rs2-win .rs2-card{height:35em}
+#successScreen .rs2-titlewrap{height:7.4em}
+.sr-star-zone{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.5em;margin:.2em auto 0;padding:.9em 3.2em .7em;min-width:34em;
+  border-radius:2.2em;background:radial-gradient(ellipse at 50% 0,rgba(255,200,60,.16),rgba(255,200,60,.03) 70%),rgba(0,0,0,.28);
+  border:.16em solid rgba(255,200,70,.28);box-shadow:inset 0 .1em .5em rgba(0,0,0,.45)}
+.sr-win-stars{position:relative;display:flex;justify-content:center;align-items:flex-end;gap:1.1em;direction:ltr;font-size:6.6em;line-height:1;height:1.12em}
+.sr-win-stars .sr-star{width:1em;height:1em}
+.sr-win-stars .sr-star:nth-child(2) svg{transform:translateY(-.1em) scale(1.16)}
+.sr-win-stars .sr-star.off svg{filter:none}
+#successScreen.active .sr-win-stars .sr-star{animation:srWinPop .55s cubic-bezier(.2,1.4,.4,1) both;animation-delay:calc(.45s + var(--i) * .25s)}
+@keyframes srWinPop{from{transform:scale(.2) rotate(-30deg);opacity:0}to{transform:scale(1) rotate(0);opacity:1}}
+#successScreen.active .sr-win-stars.perfect .sr-star.on svg{animation:srShine 2s ease-in-out 1.3s infinite}
+@keyframes srShine{0%,100%{filter:drop-shadow(0 0 .12em rgba(255,190,30,.7))}50%{filter:drop-shadow(0 0 .34em rgba(255,235,120,1)) brightness(1.15)}}
+.sr-burst{position:absolute;left:50%;top:50%;width:0;height:0;pointer-events:none}
+.sr-burst i{position:absolute;left:0;top:0;width:.1em;height:.1em;margin:-.05em;border-radius:50%;background:#ffe27a;box-shadow:0 0 .12em #ffd25a;opacity:0}
+#successScreen.active .sr-burst i{animation:srBurst 1.1s ease-out 1.1s both}
+@keyframes srBurst{0%{opacity:1;transform:rotate(var(--a)) translateY(-.2em) scale(1)}100%{opacity:0;transform:rotate(var(--a)) translateY(-1.35em) scale(.3)}}
+.sr-spot-count{display:flex;align-items:center;justify-content:center;gap:.9em;direction:rtl;font-family:'Cairo','Alexandria',sans-serif;font-weight:800;font-size:2.5em;line-height:1.2;color:#fff2c8;text-shadow:0 .08em .14em rgba(0,0,0,.85);white-space:nowrap}
+.sr-spot-count .rs2-newbest{font-size:.62em;margin:0;padding:.1em .7em;border-radius:1em;background:rgba(255,194,26,.18);border:.07em solid rgba(255,214,90,.5)}
+#app #successScreen.rs2 p#rsMessage.rs2-sub{font-size:2.25em}
+#successScreen .rs2-subrow{height:3.4em;margin-top:.3em}
+
+/* ---- failure screen: stars + count panel, above the three buttons ---- */
+#failureScreen .rs2-stage{height:47em;margin-top:-23.5em;font-size:min(.97vw,1.76vh)}
+#failureScreen.rs2-fail .rs2-card{height:37.5em}
+#failureScreen .rs2-titlewrap{height:7.4em}
+#failureScreen .rs2-subrow{height:3.4em;margin-top:.3em}
+.sr-fail-stars{flex:none;display:flex;align-items:center;justify-content:center;gap:2.2em;margin:.5em auto 0;padding:.7em 2.8em;
+  border-radius:2em;background:radial-gradient(ellipse at 50% 0,rgba(255,70,60,.16),rgba(255,70,60,.03) 70%),rgba(0,0,0,.3);
+  border:.16em solid rgba(255,90,80,.32);box-shadow:inset 0 .1em .5em rgba(0,0,0,.45)}
+.sr-fail-row{display:flex;gap:.7em;direction:ltr;font-size:4.2em;line-height:1}
+.sr-fail-row .sr-star .sr-star-off{stroke:rgba(255,130,120,.55);fill:rgba(255,60,50,.08)}
+.sr-fail-count{font-family:'Cairo','Alexandria',sans-serif;font-weight:800;font-size:2.4em;color:#ffd6d2;text-shadow:0 .08em .14em rgba(0,0,0,.85);direction:rtl;white-space:nowrap}
+
+/* ---- level select: stars on every round card + total pill ---- */
+.card-stars{display:flex;justify-content:center;align-items:center;gap:2px;direction:ltr;font-size:13px;margin-top:3px}
+.stage-round-card.locked .card-stars{opacity:.4}
+.stage-stars-total{display:inline-flex;align-items:center;gap:7px;padding:5px 14px;border-radius:9999px;background:rgba(13,16,26,.75);
+  border:1.5px solid rgba(250,204,21,.5);backdrop-filter:blur(10px);box-shadow:0 4px 14px rgba(0,0,0,.5),inset 0 1px 1px rgba(255,255,255,.12);
+  color:#fef3c7;font-weight:800;font-size:.9rem;direction:rtl;white-space:nowrap}
+.sr-total-icon{display:inline-block;width:1.25em;height:1.25em;line-height:0}
+.sr-total-icon svg{width:100%;height:100%;fill:url(#srGold);stroke:#7a3f00;stroke-width:3.4;stroke-linejoin:round;filter:drop-shadow(0 0 .2em rgba(255,190,30,.7))}
+.sr-total-num{color:#ffd54a;font-family:"Cairo",sans-serif}
+@media (max-width:560px){.sr-total-label{display:none}}
+@media (prefers-reduced-motion:reduce){.sr-star,.sr-star *,.spot-hud{animation:none !important}}
+
+
+/* ---- "watch and continue" button: glow + attention motion ---- */
+.reward-wrap{grid-column:1/-1;position:relative}
+.reward-wrap #rewardContinueBtn{position:relative !important;z-index:1 !important;width:100% !important}
+.reward-aura{position:absolute;inset:-1em -1.6em;border-radius:2.6em;z-index:0;pointer-events:none;
+  background:radial-gradient(ellipse at center,rgba(255,205,50,.9) 0%,rgba(255,170,20,.45) 48%,rgba(255,150,0,0) 74%);
+  opacity:.5;animation:srAura 1.8s ease-in-out infinite;will-change:transform,opacity}
+@keyframes srAura{0%,100%{opacity:.4;transform:scale(.96)}50%{opacity:1;transform:scale(1.07)}}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 #rewardContinueBtn{animation:srAttention 2.6s ease-in-out infinite !important}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 #rewardContinueBtn:disabled{animation:none !important}
+@keyframes srAttention{0%,56%{transform:scale(1) rotate(0)}62%{transform:scale(1.06) rotate(-1deg)}68%{transform:scale(.985) rotate(.8deg)}74%{transform:scale(1.045) rotate(-.6deg)}82%,100%{transform:scale(1) rotate(0)}}
+#rewardContinueBtn .reward-shine{position:absolute;top:0;bottom:0;left:0;width:28%;z-index:0;pointer-events:none;
+  background:linear-gradient(100deg,rgba(255,255,255,0),rgba(255,255,255,.7),rgba(255,255,255,0));
+  transform:translateX(-170%) skewX(-18deg);animation:srShineSweep 2.6s ease-in-out infinite}
+@keyframes srShineSweep{0%,45%{transform:translateX(-170%) skewX(-18deg)}100%{transform:translateX(480%) skewX(-18deg)}}
+#rewardContinueBtn:disabled .reward-shine{animation:none;opacity:0}
+#rewardContinueBtn .reward-eye{animation:srEye 2.6s ease-in-out infinite}
+@keyframes srEye{0%,50%,100%{transform:scale(1) rotate(0)}60%{transform:scale(1.18) rotate(-8deg)}72%{transform:scale(1.1) rotate(7deg)}}
+.reward-wrap:has(#rewardContinueBtn:disabled) .reward-aura{animation:none;opacity:.12}
+
+/* fix: keep the reward button full width inside its glow wrapper (beats the `all:unset` button reset) */
+.reward-wrap{display:block;width:100%;min-width:0}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 .reward-wrap #rewardContinueBtn{width:100% !important;min-width:100% !important;max-width:100% !important;box-sizing:border-box !important;display:flex !important}

@@ -3,7 +3,7 @@
 - الإعلان: Rewarded حقيقي من AdMob بمعرّفات الاختبار الرسمية من Google.
   المعرّفان في: app/src/main/res/values/strings.xml  (admob_app_id و admob_rewarded_unit_id)
   استبدلهما بمعرّفاتك قبل النشر على Google Play.
-- التوقيع: keystore.p12 (كلمة السر: silentraid). احتفظ به، ولا ترفع المشروع إلا في مستودع Private.
+- التوقيع: المفتاح اتشال من المشروع (أمان). شوف قسم V1.0.15 تحت لطريقة إضافته كـ Secrets في GitHub.
 - البناء السحابي: .github/workflows/build.yml يبني ملف APK تلقائيًا على GitHub.
 
 --- الإصدار 1.0.7 ---
@@ -56,3 +56,20 @@
   * واجهة الخسارة: اتشال صوت alarm-loss.mp3. دلوقتي: بعد ثانية من ظهور الواجهة يشتغل assets/you-lose.mp3، ويشتغل مع you-lose في نفس اللحظة (ميكس)، ولما يخلصوا الاتنين يتعاد صوت الهورن لوحده مرة واحدة assets/losing-horn.mp3. التوقيتات والمستويات ثوابت في script.js (LOSE_SFX_DELAY_MS / LOSE_SFX_STOP_MS / LOSE_SFX_VOLUME / LOSE_HORN_VOLUME).
   * صور اللص (يمين/شمال، بالفلوس وبدونها): اتكمّل الحد السفلي لطية القبعة اللي كان مقطوع، واتشال شريط فاتح زايد في صورة اليمين.
   * سرعة نزول الفلوس في واجهة الفوز زادت ~1.6x (vy في startResultRain)، وسرعة حركة السلاسل في واجهة الخسارة زادت ~1.67x (animation-duration * .3 في style.css).
+  * أمان: keystore.p12 اتشال من المشروع وأضفنا .gitignore لمنع رفعه. التوقيع بقى من متغيرات بيئة: KEYSTORE_PATH, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD.
+    في GitHub: Settings > Secrets and variables > Actions، أضف: KEYSTORE_BASE64 (ناتج: base64 -w0 keystore.p12) و KEYSTORE_PASSWORD و KEY_ALIAS و KEY_PASSWORD.
+    بدون المفتاح الـ APK بيتبني غير موقّع (مع تحذير) بدل ما البناء يفشل.
+  * الحجم: الخلفيات والشخصيات والصورة الرئيسية اتحولت JPG/PNG -> WebP (7.2MB -> 1.3MB)، وmain-title / win-rock / losing-horn اتضغطوا لـ 128kbps.
+  * نجوم (1-3) في واجهة الفوز حسب الوقت المتبقي، وتتخزن أفضل نتيجة لكل مرحلة + إحصائيات (فوز/خسارة/أسرع وقت) محلياً. متاحة من الكونسول عبر window.SilentRaidStats.
+  * اهتزاز خفيف عند الفوز والخسارة (صلاحية VIBRATE).
+  * صوت الخسارة صار يشتغل عبر Web Audio (نفس لحظة البداية للاثنين)، وبيرجع تلقائياً لـ HTMLAudio لو الملفات لسه ما اتفكّتش.
+  * AndroidManifest: allowBackup=false وusesCleartextTraffic=false.
+  * تنظيف: حذف كود ميت (if(false) ودالة فاضية) وتعريفات keyframes مكررة.
+  * ملفات جديدة: STORE-CHECKLIST-AR.md (قائمة النشر، فيها تحذير Target API 36 وأرقام AdMob التجريبية) وPRIVACY-POLICY-TEMPLATE-AR.md.
+
+- V1.0.16 (جاهزية Google Play):
+  * compileSdk/targetSdk = 36، AGP 8.11.1، Gradle 8.13 (في build.gradle وworkflow).
+  * MainActivity: OnBackInvokedCallback لزر الرجوع (Android 13+)، وWindowInsetsController بدل setSystemUiVisibility، وpadding لمنطقة الـ cutout.
+  * AndroidManifest: enableOnBackInvokedCallback + PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY (للحفاظ على landscape على التابلت).
+  * تحذير في البناء (Gradle + GitHub Actions) لو أرقام AdMob لسه تجريبية.
+  * Firebase Analytics: جسر SilentRaidAnalytics (Java) + دالة track() في script.js. الأحداث: level_start, level_end, reward_ad_requested, reward_ad_earned. بيشتغل فقط لو app/google-services.json موجود، وبدونه البناء والتشغيل طبيعي.
