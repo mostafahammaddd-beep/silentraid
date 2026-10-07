@@ -51,7 +51,22 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: gradle -p SilentRaid assembleRelease --no-daemon --stacktrace --console=plain
+        run: |
+          set -e
+          if gradle --version | grep -q '^Gradle 8\.13'; then
+            GRADLE_CMD=gradle
+          else
+            echo 'Gradle 8.13 was not selected; installing it explicitly.'
+            DIST_DIR="$RUNNER_TEMP/gradle-8.13"
+            if [ ! -x "$DIST_DIR/bin/gradle" ]; then
+              curl -fsSL https://services.gradle.org/distributions/gradle-8.13-bin.zip -o "$RUNNER_TEMP/gradle-8.13-bin.zip"
+              rm -rf "$DIST_DIR"
+              unzip -q "$RUNNER_TEMP/gradle-8.13-bin.zip" -d "$RUNNER_TEMP"
+            fi
+            GRADLE_CMD="$DIST_DIR/bin/gradle"
+          fi
+          "$GRADLE_CMD" --version
+          "$GRADLE_CMD" -p SilentRaid assembleRelease --no-daemon --stacktrace --console=plain
 
       - uses: actions/upload-artifact@v4
         with:
