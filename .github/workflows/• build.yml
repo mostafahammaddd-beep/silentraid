@@ -6,7 +6,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30          # لو علّق لأي سبب يقفل لوحده ويظهر خطأ بدل ما يفضل يحمّل
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -27,18 +27,39 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
-          cache-disabled: true     # الكاش كان ممكن يعلّق خطوة الإعداد/الحفظ
+          cache-disabled: true
 
-      - name: Prepare signing key (from GitHub secrets)
+      # An unsigned APK can NOT be installed on a phone ("package appears to be invalid").
+      # This step guarantees a signing key exists, whatever else is (or is not) in the repository.
+      - name: Prepare signing key
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          S_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          S_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          S_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/keystore.p12"
-            echo "KEYSTORE_PATH=$RUNNER_TEMP/keystore.p12" >> "$GITHUB_ENV"
+          KS="$RUNNER_TEMP/keystore.p12"
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$S_KEYSTORE_PASSWORD" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$KS"
+            echo "KEYSTORE_PASSWORD=$S_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "KEY_ALIAS=${S_KEY_ALIAS:-silentraid}" >> "$GITHUB_ENV"
+            echo "KEY_PASSWORD=${S_KEY_PASSWORD:-$S_KEYSTORE_PASSWORD}" >> "$GITHUB_ENV"
+            echo "Signing with the key from GitHub secrets."
           else
-            echo "::warning::KEYSTORE_BASE64 secret is missing - the APK is signed with the bundled sideload key (installable, but NOT for Google Play)."
+            if [ -f SilentRaid/app/sideload-keystore.p12 ]; then
+              cp SilentRaid/app/sideload-keystore.p12 "$KS"
+              echo "Signing with the bundled sideload key."
+            else
+              keytool -genkeypair -storetype PKCS12 -keystore "$KS" -storepass silentraid -keypass silentraid \
+                -alias silentraid -keyalg RSA -keysize 2048 -validity 36500 -dname "CN=Silent Raid, O=Silent Raid, C=EG"
+              echo "::warning::No key found - generated a temporary one for this build."
+            fi
+            echo "KEYSTORE_PASSWORD=silentraid" >> "$GITHUB_ENV"
+            echo "KEY_ALIAS=silentraid" >> "$GITHUB_ENV"
+            echo "KEY_PASSWORD=silentraid" >> "$GITHUB_ENV"
+            echo "::warning::Signed with a non-secret key: fine for installing on a phone, NOT for Google Play."
           fi
+          echo "KEYSTORE_PATH=$KS" >> "$GITHUB_ENV"
 
       - name: Check AdMob ids
         run: |
@@ -47,14 +68,19 @@ jobs:
           fi
 
       - name: Build release APK
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: gradle -p SilentRaid assembleRelease --no-daemon --stacktrace --console=plain
+
+      - name: Verify the APK is signed
+        run: |
+          ls -la SilentRaid/app/build/outputs/apk/release/
+          APK=$(ls SilentRaid/app/build/outputs/apk/release/*.apk | head -1)
+          case "$APK" in *unsigned*) echo "::error::The APK is UNSIGNED: $APK"; exit 1;; esac
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          cp "$APK" "$RUNNER_TEMP/SilentRaid.apk"
 
       - uses: actions/upload-artifact@v4
         with:
           name: SilentRaid-APK
-          path: SilentRaid/app/build/outputs/apk/release/*.apk
+          path: ${{ runner.temp }}/SilentRaid.apk
           if-no-files-found: error
