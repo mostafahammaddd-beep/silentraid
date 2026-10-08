@@ -141,86 +141,125 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   // Adaptive render quality. The canvas backing store shrinks a step when this device cannot hold ~45fps,
   // and the learned level is remembered so the next launch starts from a sensible point instead of stuttering again.
   const QUALITY_KEY='silent_raid_quality_v1';
+  const RENDER_DPR_CAP=2.5;          // sharper than before (was 2); the launch benchmark steps down on phones that can't hold it
+  const RENDER_PIXEL_BUDGET=3.4e6;   // total backing-store pixels at the top tier
   const QUALITY_SCALES=[1,.85,.72,.6];
   let qualityLevel=0;
   // The last measured level is the starting guess; the launch benchmark below replaces it within ~0.5s.
   try{ qualityLevel=Math.max(0,Math.min(QUALITY_SCALES.length-1,(Number(localStorage.getItem(QUALITY_KEY))||1)-1)); }catch(_){}
-  const BENCH_BUDGET_MS=6.5;   // GPU+CPU cost allowed for one benchmark frame so real gameplay keeps headroom for 60fps
-  // Launch benchmark: renders a gameplay-like frame (floor gradient, tiles, walls, guard rings, sprite, full-screen fog)
-  // on a hidden canvas at each quality tier, best first, and keeps the best tier that fits the budget. One GPU flush
-  // per tier makes the timing include real rasterisation, not just JS. Runs once, before the player taps "start".
-  function calibrateRenderQuality(schedule){
-    schedule=schedule||((fn)=>setTimeout(fn,0));
-    let width,height;
-    try{ ({width,height}=getViewportSize()); }catch(_){ return; }
-    let baseDpr=Math.min(2,Math.max(1,window.devicePixelRatio||1));
-    baseDpr=Math.min(baseDpr,Math.sqrt(2.6e6/Math.max(1,width*height)));
-    const spriteCv=document.createElement('canvas'); spriteCv.width=spriteCv.height=128;
-    try{ const sg=spriteCv.getContext('2d'); const gr=sg.createRadialGradient(50,44,6,64,64,60); gr.addColorStop(0,'#f5d28a'); gr.addColorStop(1,'#3a2a14'); sg.fillStyle=gr; sg.beginPath(); sg.arc(64,64,60,0,Math.PI*2); sg.fill(); }catch(_){}
-    let tier=0; const costs=[];
-    const finish=(chosen)=>{
-      qualityLevel=chosen;
-      try{ localStorage.setItem(QUALITY_KEY,String(chosen+1)); }catch(_){}
-      perfAcc=0; perfN=0;
-      try{ layoutGameSurface(); }catch(_){}
-      window.__srQuality={level:chosen,costsMs:costs.map(v=>Math.round(v*10)/10)};
-    };
-    const step=()=>{
-      if(tier>=QUALITY_SCALES.length){ finish(QUALITY_SCALES.length-1); return; }
-      const dpr=Math.max(.75,baseDpr*QUALITY_SCALES[tier]);
-      let ms=Infinity;
-      try{
-        const c=document.createElement('canvas'); c.width=Math.max(1,Math.round(width*dpr)); c.height=Math.max(1,Math.round(height*dpr));
-        const g=c.getContext('2d');
-        const paint=(k)=>{
-          g.setTransform(dpr,0,0,dpr,0,0);
-          g.fillStyle='#090a0c'; g.fillRect(0,0,width,height);
-          const lg=g.createLinearGradient(0,0,width,height); lg.addColorStop(0,'#3b342c'); lg.addColorStop(1,'#171411');
-          g.fillStyle=lg; g.fillRect(0,0,width,height);
-          g.fillStyle='rgba(240,201,108,.05)'; g.beginPath();
-          for(let i=0;i<160;i++) g.rect((i*37)%width,(i*53+k)%height,30,30); g.fill();
-          g.strokeStyle='rgba(212,184,120,.4)'; g.lineWidth=1; g.beginPath();
-          for(let i=0;i<160;i++) g.rect(((i*37)%width)+.5,((i*53+k)%height)+.5,29,29); g.stroke();
-          g.fillStyle='#4a4038'; g.beginPath();
-          for(let i=0;i<90;i++){ const x=(i*61)%width,y=(i*29)%height; g.moveTo(x,y); g.lineTo(x+34,y+4); g.lineTo(x+30,y+30); g.lineTo(x+2,y+26); g.closePath(); }
-          g.fill();
-          for(let i=0;i<3;i++){
-            const x=width*(.25+i*.25), y=height*.5;
-            g.globalAlpha=.09; g.fillStyle='#22c55e'; g.beginPath(); g.arc(x,y,122,0,Math.PI*2); g.fill();
-            g.globalAlpha=.32; g.strokeStyle='#22c55e'; g.setLineDash([6,8]); g.lineWidth=8; g.stroke(); g.lineWidth=2; g.stroke(); g.setLineDash([]);
-            g.globalAlpha=1;
-          }
-          g.drawImage(spriteCv,width/2-60+(k%5),height/2-60,120,120);
-          const R=Math.min(width,height)*.5, fg=g.createRadialGradient(width/2,height/2,R*.35,width/2,height/2,R);
-          fg.addColorStop(0,'rgba(0,0,0,0)'); fg.addColorStop(.88,'rgba(0,0,0,.55)'); fg.addColorStop(1,'rgba(0,0,0,1)');
-          g.fillStyle=fg; g.fillRect(0,0,width,height);
-        };
-        paint(0); g.getImageData(0,0,1,1);                 // warm-up: shader/texture creation is not timed
-        const frames=6, t0=performance.now();
-        for(let f=1;f<=frames;f++) paint(f);
-        g.getImageData(0,0,1,1);                           // flush the GPU queue so the clock includes rasterisation
-        ms=(performance.now()-t0)/frames;
-        c.width=c.height=0;
-      }catch(_){ ms=Infinity; }
-      costs.push(ms);
-      if(ms<=BENCH_BUDGET_MS){ finish(tier); return; }
-      tier++; schedule(step);
-    };
-    schedule(step);
-  }
-  let perfAcc=0, perfN=0;
+  let perfAcc=0, perfN=0, perfBad=0, perfWarm=0;
   let thiefSpriteCache=new WeakMap();
+  // Safety net only (the launch benchmark makes the real decision): needs two consecutive slow 90-frame windows,
+  // and ignores the first second after the loop (re)starts while sprite caches and shaders warm up.
   function monitorFramePerformance(rawMs){
     if(gameState!=='PLAYING' || rawMs>120) return;   // ignore pauses / ad overlays / tab switches
+    if(perfWarm>0){ perfWarm--; return; }
     perfAcc+=rawMs; perfN++;
-    if(perfN<150) return;
+    if(perfN<90) return;
     const avg=perfAcc/perfN; perfAcc=0; perfN=0;
-    if(avg>23 && qualityLevel<QUALITY_SCALES.length-1){
-      qualityLevel++;
+    perfBad = avg>26 ? perfBad+1 : 0;
+    if(perfBad>=2 && qualityLevel<QUALITY_SCALES.length-1){
+      perfBad=0; qualityLevel++;
       try{ localStorage.setItem(QUALITY_KEY,String(qualityLevel+1)); }catch(_){}
       layoutGameSurface();
     }
   }
+
+  // ---- Launch benchmark -------------------------------------------------------------------------------
+  // Goal: know the best resolution this phone sustains BEFORE the first round, invisibly and in a few ms.
+  //  * It renders a gameplay-like frame on a detached canvas: full-screen floor gradient + tiles + walls +
+  //    guard rings + sprite + the full-screen fog gradient (the real per-frame costs).
+  //  * One GPU flush per small batch (a 1x1 readback) so the clock includes real rasterisation, not just JS.
+  //  * Tiny time slices (3 frames) between setTimeout yields, so the menu animation never stutters.
+  //  * Strong phone: one slice (~3 frames) is enough -> done in a few milliseconds.
+  //    Weak phone: tier 0 is measured once, the other tiers are PREDICTED (cost scales with pixel count),
+  //    and only the chosen tier is verified -> never more than a handful of slices.
+  //  * Median of batches, so one GC pause / background task cannot skew the result.
+  const BENCH_BUDGET_MS=8;
+  function createBenchTier(width,height,dpr,spriteCv){
+    const c=document.createElement('canvas');
+    c.width=Math.max(1,Math.round(width*dpr)); c.height=Math.max(1,Math.round(height*dpr));
+    const g=c.getContext('2d');
+    const lg=g.createLinearGradient(0,0,width,height); lg.addColorStop(0,'#3b342c'); lg.addColorStop(.5,'#2a241e'); lg.addColorStop(1,'#171411');
+    const R=Math.min(width,height)*.5;
+    const fog=g.createRadialGradient(width/2,height/2,R*.35,width/2,height/2,R);
+    fog.addColorStop(0,'rgba(0,0,0,0)'); fog.addColorStop(.65,'rgba(0,0,0,.08)'); fog.addColorStop(.88,'rgba(0,0,0,.55)'); fog.addColorStop(1,'rgba(0,0,0,1)');
+    const paint=(k)=>{
+      g.setTransform(dpr,0,0,dpr,0,0);
+      g.fillStyle='#090a0c'; g.fillRect(0,0,width,height);
+      g.fillStyle=lg; g.fillRect(0,0,width,height);
+      g.fillStyle='rgba(240,201,108,.05)'; g.beginPath();
+      for(let i=0;i<80;i++) g.rect((i*37)%width,(i*53+k)%height,40,40); g.fill();
+      g.strokeStyle='rgba(212,184,120,.4)'; g.lineWidth=1; g.beginPath();
+      for(let i=0;i<80;i++) g.rect(((i*37)%width)+.5,((i*53+k)%height)+.5,39,39); g.stroke();
+      g.fillStyle='#4a4038'; g.beginPath();
+      for(let i=0;i<50;i++){ const x=(i*61)%width,y=(i*29)%height; g.moveTo(x,y); g.lineTo(x+44,y+4); g.lineTo(x+40,y+40); g.lineTo(x+2,y+36); g.closePath(); }
+      g.fill();
+      for(let i=0;i<3;i++){
+        const x=width*(.25+i*.25), y=height*.5;
+        g.globalAlpha=.09; g.fillStyle='#22c55e'; g.beginPath(); g.arc(x,y,122,0,Math.PI*2); g.fill();
+        g.globalAlpha=.32; g.strokeStyle='#22c55e'; g.setLineDash([6,8]); g.lineWidth=8; g.stroke(); g.lineWidth=2; g.stroke(); g.setLineDash([]);
+        g.globalAlpha=1;
+      }
+      g.drawImage(spriteCv,width/2-60+(k%5),height/2-60,120,120);
+      g.fillStyle=fog; g.fillRect(0,0,width,height);
+    };
+    paint(0); g.getImageData(0,0,1,1);                  // warm-up (shader/texture creation) - not timed
+    return {
+      batch(n){                                          // average ms/frame over n frames, GPU flushed
+        const t0=performance.now();
+        for(let f=1;f<=n;f++) paint(f);
+        g.getImageData(0,0,1,1);
+        return (performance.now()-t0)/n;
+      },
+      dispose(){ c.width=c.height=0; }
+    };
+  }
+  function calibrateRenderQuality(schedule){
+    schedule=schedule||((fn)=>setTimeout(fn,0));
+    let width,height;
+    try{ ({width,height}=getViewportSize()); }catch(_){ return; }
+    if(!(width>0&&height>0)) return;
+    let baseDpr=Math.min(RENDER_DPR_CAP,Math.max(1,window.devicePixelRatio||1));
+    baseDpr=Math.min(baseDpr,Math.sqrt(RENDER_PIXEL_BUDGET/Math.max(1,width*height)));
+    const dprOf=(t)=>Math.max(.75,baseDpr*QUALITY_SCALES[t]);
+    const spriteCv=document.createElement('canvas'); spriteCv.width=spriteCv.height=128;
+    try{ const sg=spriteCv.getContext('2d'); const gr=sg.createRadialGradient(50,44,6,64,64,60); gr.addColorStop(0,'#f5d28a'); gr.addColorStop(1,'#3a2a14'); sg.fillStyle=gr; sg.beginPath(); sg.arc(64,64,60,0,Math.PI*2); sg.fill(); }catch(_){}
+    const log={tiers:{},chosen:-1,slices:0};
+    const median=(a)=>a.slice().sort((x,y)=>x-y)[a.length>>1];
+    const finish=(chosen)=>{
+      log.chosen=chosen; window.__srQuality=log;
+      qualityLevel=chosen;
+      try{ localStorage.setItem(QUALITY_KEY,String(chosen+1)); }catch(_){}
+      perfAcc=0; perfN=0; perfBad=0;
+      try{ layoutGameSurface(); }catch(_){}
+    };
+    // Measure one tier in small slices. cb(medianMs) is called when done; `early(v,samples)` may cut it short.
+    const measure=(tier,maxBatches,early,cb)=>{
+      let bench; try{ bench=createBenchTier(width,height,dprOf(tier),spriteCv); }catch(_){ cb(Infinity); return; }
+      const samples=[];
+      const slice=()=>{
+        log.slices++;
+        let v; try{ v=bench.batch(3); }catch(_){ v=Infinity; }
+        samples.push(v);
+        const verdict=early?early(v,samples):null;
+        if(verdict==='stop' || samples.length>=maxBatches){ bench.dispose(); const m=median(samples); log.tiers[tier]=Math.round(m*10)/10; cb(m); return; }
+        schedule(slice);
+      };
+      schedule(slice);
+    };
+    const last=QUALITY_SCALES.length-1;
+    // 1) tier 0: a clearly strong phone (<= half the budget) is decided after ONE slice; a clearly weak one after one too.
+    measure(0,3,(v,s)=>(s.length===1&&(v<=BENCH_BUDGET_MS*.5||v>BENCH_BUDGET_MS*3))?'stop':null,(cost0)=>{
+      if(cost0<=BENCH_BUDGET_MS){ finish(0); return; }
+      // 2) predict the other tiers (cost ~ pixels ~ dpr^2) and pick the best predicted fit...
+      let pick=last;
+      for(let t=1;t<=last;t++){ const ratio=dprOf(t)/dprOf(0); if(cost0*ratio*ratio<=BENCH_BUDGET_MS*.95){ pick=t; break; } }
+      // 3) ...then verify just that tier once; if the prediction was optimistic, drop one more tier.
+      measure(pick,1,null,(c)=>{ finish((c>BENCH_BUDGET_MS*1.35 && pick<last)?pick+1:pick); });
+    });
+  }
+
   function prepareLogicalGameplayWidth(){
     const {width,height}=getViewportSize();
     // Keep the original 4:3 layout on 4:3-or-narrower displays. On wider
@@ -238,8 +277,8 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     // on 3x/4x panels while preserving the visual quality used on newer phones.
     // Render at the screen's real resolution (up to 2x) so walls, guards and the thief are crisp. A total pixel
     // budget keeps big tablets cheap, and the adaptive quality step lowers it only if the device cannot keep up.
-    let dpr=Math.min(2,Math.max(1,window.devicePixelRatio||1));
-    dpr=Math.min(dpr,Math.sqrt(2.6e6/Math.max(1,width*height)));
+    let dpr=Math.min(RENDER_DPR_CAP,Math.max(1,window.devicePixelRatio||1));
+    dpr=Math.min(dpr,Math.sqrt(RENDER_PIXEL_BUDGET/Math.max(1,width*height)));
     dpr=Math.max(.75,dpr*QUALITY_SCALES[qualityLevel]);
     thiefSpriteCache=new WeakMap();
     viewport.width = width;
@@ -600,7 +639,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     // Lock before the CSS screen transition can provoke any WebView resize.
     // Landscape gameplay has no legitimate viewport resize during a round.
     gameplaySurfaceLocked = next === 'PLAYING';
-    const crossfade = gameState==='PLAYING' && (next==='SUCCESS'||next==='FAILURE');
+    const prevState = gameState;
     gameState = next;
     // The gameplay host is already edge-to-edge. Toggling this old body class
     // activated several legacy, conflicting fixed/100vw/100vh rule sets in the
@@ -628,12 +667,13 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     });
     if(next==='PLAYING') screens.PLAYING?.classList.remove('rx-fail','rx-success');
     Object.values(screens).forEach(el=>{ if(el){ el.classList.remove('leaving','entering'); } });
-    if(crossfade){
-      // Keep the frozen game frame underneath while the result screen fades in on top: no hard cut to black.
-      screens.PLAYING?.classList.add('leaving');
-      screens[next]?.classList.add('entering');
+    if(prevState!==next && screens[prevState] && screens[next]){
+      // Every screen change: the old screen stays painted underneath while the new one fades in on top
+      // (compositor-only opacity), so there is never a hard cut to black.
+      screens[prevState].classList.add('leaving');
+      screens[next].classList.add('entering');
       clearTimeout(setState._xf);
-      setState._xf=setTimeout(()=>{ Object.values(screens).forEach(el=>el&&el.classList.remove('leaving','entering')); },760);
+      setState._xf=setTimeout(()=>{ Object.values(screens).forEach(el=>el&&el.classList.remove('leaving','entering')); },480);
     }
     if (next !== 'PLAYING') resetInput();
 
@@ -1170,44 +1210,70 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     if(nextBtn) nextBtn.classList.toggle('disabled', currentViewingStage >= 5);
   }
 
+  // A world built ahead of time (while the last round's end-beat plays) so the next round starts instantly.
+  let prebuiltRound=null;
+  function veil(on){
+    const v=document.getElementById('transitionVeil'); if(!v) return;
+    v.classList.remove(on?'off':'on'); v.classList.add(on?'on':'off');
+  }
   function startRaid(){
     resultTransitioning=false;
     isGameOver=false;
     isMapFullyLoaded=false;
-    // Establish the logical world aspect BEFORE generating the maze. This is the
-    // key difference between a stretched 4:3 view and a true widescreen round.
+    // Establish the logical world aspect BEFORE generating the maze (true widescreen round).
     prepareLogicalGameplayWidth();
-    // Finish creating a usable world before showing PLAYING. If setup ever
-    // fails, the player remains on the current screen instead of seeing a
-    // black canvas with a frozen 00:00 HUD.
-    try {
-      buildLevel();
-    } catch (err) {
-      console.error('Silent Raid level setup error', err);
-      isMapFullyLoaded=false;
-      showMessage('تعذر تجهيز الدور. أعد المحاولة.');
-      return;
+    let pre=null;
+    if(prebuiltRound && prebuiltRound.stage===level.stage && prebuiltRound.level===level.level && prebuiltRound.W===W && prebuiltRound.H===H) pre=prebuiltRound.world;
+    prebuiltRound=null;
+    const go=()=>{
+      // Finish creating a usable world before showing PLAYING. If setup fails the player stays where he is.
+      try {
+        buildLevel(pre);
+      } catch (err) {
+        console.error('Silent Raid level setup error', err);
+        isMapFullyLoaded=false;
+        veil(false);
+        showMessage('تعذر تجهيز الدور. أعد المحاولة.');
+        return;
+      }
+      // The level-select JPEG is not needed once the round runs; release it to lower peak GPU memory.
+      const stageBoardImg=document.getElementById('stageBoardImg');
+      if(stageBoardImg && typeof stageBoardImg.removeAttribute==='function') stageBoardImg.removeAttribute('src');
+      setState('PLAYING');
+      try { setMainTitleGameplayVolume(); } catch (_) {}
+      veil(false);
+    };
+    if(pre){ go(); return; }              // nothing heavy left to do: straight cross-fade into the round
+    // Building a maze blocks the main thread for a moment (longer on weak phones). A compositor-driven fade to
+    // black starts first and keeps animating smoothly through that moment, then fades out into the round.
+    veil(true);
+    requestAnimationFrame(()=>requestAnimationFrame(go));
+  }
+  // Build the round that will most likely be played next while the end-of-round beat is on screen.
+  function prebuildRound(stage,lvl){
+    const saved={world,stage:level.stage,lvl:level.level,turn:level.turn};
+    try{
+      level.stage=stage; level.level=lvl; level.turn=((stage-1)*7)+lvl;
+      const w=composeRoundWorld();
+      prebuiltRound={stage,level:lvl,W,H,world:w};
+    }catch(err){ prebuiltRound=null; }
+    finally{ world=saved.world; level.stage=saved.stage; level.level=saved.lvl; level.turn=saved.turn; }
+  }
+  function schedulePrebuild(kind){
+    let st=level.stage, lv=level.level;
+    if(kind==='success'){
+      const g=((st-1)*7)+lv; if(g>=35) return;
+      const ng=g+1; st=Math.floor((ng-1)/7)+1; lv=((ng-1)%7)+1;
     }
-    // This JPEG belongs only to the level-selection scene. Releasing it before
-    // the game Canvas becomes visible reduces the peak GPU texture set during
-    // the transition without changing either scene's design.
-    const stageBoardImg=document.getElementById('stageBoardImg');
-    if(stageBoardImg && typeof stageBoardImg.removeAttribute==='function') stageBoardImg.removeAttribute('src');
-    setState('PLAYING');
-    try { setMainTitleGameplayVolume(); } catch (_) {}
+    setTimeout(()=>{ if(isGameOver && gameState==='PLAYING') prebuildRound(st,lv); },90);
   }
 
-  function buildLevel(){
-    isMapFullyLoaded=false; isGameOver=false; world=null;
-    if(typeof hudCache!=='undefined') Object.assign(hudCache,{levelText:null,seconds:null,keys:null,chase:null});
-    updateHUD();
+  function composeRoundWorld(){
     const nextWorld=buildMaze(hashSeed(level.stage,level.level,level.turn));
     const pCell=nextWorld.grid.length ? [1,1] : [0,0];
     world=nextWorld;
     world.spot=createSpotState(world);
-    // The full sprite now participates in collision. If the nominal spawn is
-    // too close to a ceiling brick, choose the nearest valid floor cell so the
-    // thief never begins with his head already inside a wall.
+    // The full sprite participates in collision: pick the nearest valid floor cell for the spawn.
     let spawnPos=null;
     const candidates=[...nextWorld.floorCells].sort((a,b)=>(Math.abs(a[0]-pCell[0])+Math.abs(a[1]-pCell[1]))-(Math.abs(b[0]-pCell[0])+Math.abs(b[1]-pCell[1])));
     for(const candidate of candidates){
@@ -1220,12 +1286,20 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       spawnPos=fitThiefStand(fallback.x,fallback.y);
     }
     nextWorld.player={x:spawnPos.x,y:spawnPos.y,vx:0,vy:0,r:15,lastDir:{x:1,y:0},wobble:0,opacity:1,keys:0};
+    nextWorld.backgroundCanvas=null;
+    nextWorld.timerStart=Math.max(1,Number(nextWorld.timer)||1);
+    return nextWorld;
+  }
+
+  function buildLevel(pre){
+    isMapFullyLoaded=false; isGameOver=false; world=null;
+    if(typeof hudCache!=='undefined') Object.assign(hudCache,{levelText:null,seconds:null,keys:null,chase:null});
+    updateHUD();
+    const nextWorld=pre||composeRoundWorld();
+    world=nextWorld;
     const appEl=document.getElementById('app');
     if(appEl) appEl.dataset.stageTheme=world.theme;
     resizeGameSurface();
-    // Do not allocate a second full-map canvas. The visible map is painted
-    // directly into the game canvas, eliminating the large extra GPU surface
-    // that made older WebViews flicker while entering a round.
     world.backgroundCanvas=null;
     resetRewardState();
     world.timerStart=Math.max(1,Number(world.timer)||1);
@@ -1531,7 +1605,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     try{
       const mv=getMoveInput(dt);
       const running=mv.mag>.08;
-      const maxSpeed=running?150:110;
+      const maxSpeed=(running?150:110)*SPEED_BOOST;
       const response=running?16:22;
       const follow=1-Math.exp(-response*Math.max(0.001,Math.min(0.05,dt)));
       const tx=mv.x*maxSpeed*mv.mag, ty=mv.y*maxSpeed*mv.mag;
@@ -1875,7 +1949,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
 
       let dx=(waypoint?waypoint.x:g.x)-g.x;
       let dy=(waypoint?waypoint.y:g.y)-g.y;
-      const moveSpeed=(g.patrolSpeed||defaultGuardSpeed);
+      const moveSpeed=(g.patrolSpeed||defaultGuardSpeed)*SPEED_BOOST;
       const dm=Math.hypot(dx,dy);
       const moveStartX=g.x, moveStartY=g.y;
 
@@ -2276,13 +2350,14 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     if(failureText) failureText.textContent=spotted?'تم رصدك مرات كثيرة':(purpose==='time'?'انتهى الوقت قبل أن تهرب بالمسروقات.':'أحاط بك رجال الأمن وأُغلقت العملية.');
     // A short, deliberate beat on the frozen last frame (red vignette + punch), then a cross-fade to the result screen.
     beginRoundEndFx('fail');
+    schedulePrebuild('fail');
     recordResult(false);
     haptic([120,70,220]);
     setTimeout(()=>{
       if(!isGameOver || gameState!=='PLAYING') return;
       setState('FAILURE');
       fadeGameOverMusicIn();
-    },520);
+    },200);
   }
 
   function requestRewardContinue(){
@@ -2589,6 +2664,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     const result=recordResult(true);
     // Keep the success SFX aligned with the result transition.
     beginRoundEndFx('success');
+    schedulePrebuild('success');
     setTimeout(()=>{
       if(!isGameOver)return;
       setState('SUCCESS');
@@ -4548,9 +4624,9 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   function runAfterResultFade(action){
     if(resultTransitioning)return;
     resultTransitioning=true;
-    fadeResultMusicOut(()=>{
-      try{action();}finally{resultTransitioning=false;}
-    });
+    // Go immediately: setState() already fades the result music out in the background. Waiting for the
+    // 850ms fade before doing anything made every button feel laggy.
+    try{action();}finally{ setTimeout(()=>{resultTransitioning=false;},450); }
   }
   document.getElementById('retryBtn').addEventListener('click',()=>runAfterResultFade(()=>startRaid()));
   document.getElementById('rewardContinueBtn')?.addEventListener('click',requestRewardContinue);
@@ -4604,6 +4680,8 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   // On a slow device a long frame must not queue many extra simulation steps: that makes the next
   // frame even longer (a death spiral). Two steps max; the game then simply runs slightly slower.
   const MAX_CATCHUP_STEPS=2;
+  // Thief and guards both move 8% faster than before (same ratio, so the chase balance is unchanged).
+  const SPEED_BOOST=1.08;
   // Keep simulation at a stable 60Hz while avoiding duplicate full Canvas renders
   // on 90/120Hz displays. This reduces GPU/CPU pressure without changing gameplay timing.
   const TARGET_RENDER_MS=1000/60;
@@ -4612,9 +4690,11 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   function startGameRenderLoop(){
     if(gameLoopActive) return;
     gameLoopActive=true;
+    perfWarm=60; perfAcc=0; perfN=0;
     simAccumulator=0;
     lastPresentedFrame=0;
     lastFrame=performance.now();
+    snapshotPrev();
     gameFrameRaf=requestAnimationFrame(frame);
   }
 
@@ -4627,22 +4707,58 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     }
   }
 
+  // ---- smooth presentation -------------------------------------------------------------------------
+  // The simulation runs at a fixed 60Hz. Drawing raw simulation positions makes motion judder whenever a
+  // display frame falls between two sim steps (0, 1 or 2 steps per frame). So the thief, the guards (and
+  // therefore the camera and the light that follow them) are drawn at the position interpolated between
+  // the previous and the current sim step.
+  let refreshMs=1000/60, refreshSamples=[], presentParity=0;
+  function snapshotPrev(){
+    const w=world; if(!w) return;
+    const p=w.player; if(p){ p.px=p.x; p.py=p.y; }
+    const gs=w.guards; if(gs) for(let i=0;i<gs.length;i++){ const g=gs[i]; g.px=g.x; g.py=g.y; }
+  }
+  function renderInterpolated(now){
+    const w=world;
+    const a=Math.min(1,simAccumulator/FIXED_DT);
+    if(!w || gameState!=='PLAYING' || isGameOver || !(a>.001)){ draw(now); return; }
+    const saved=[];
+    const lerpEnt=(e)=>{
+      if(e.px===undefined) return;
+      const dx=e.x-e.px, dy=e.y-e.py;
+      if(dx*dx+dy*dy>2304) return;               // teleport (spawn / relocation): never smear across the map
+      saved.push(e,e.x,e.y);
+      e.x=e.px+dx*a; e.y=e.py+dy*a;
+    };
+    if(w.player) lerpEnt(w.player);
+    if(w.guards) for(let i=0;i<w.guards.length;i++) lerpEnt(w.guards[i]);
+    try{ draw(now); }
+    finally{ for(let i=0;i<saved.length;i+=3){ const e=saved[i]; e.x=saved[i+1]; e.y=saved[i+2]; } }
+  }
   function frame(now){
     if(!gameLoopActive) return;
-    monitorFramePerformance(now-lastFrame);
-    const raw=Math.min(.20,Math.max(0,(now-lastFrame)/1000));
+    const delta=now-lastFrame;
+    monitorFramePerformance(delta);
+    // Learn the display refresh interval (median of 30 samples) once.
+    if(refreshSamples.length<30 && delta>3 && delta<40){
+      refreshSamples.push(delta);
+      if(refreshSamples.length===30){ refreshSamples.sort((x,y)=>x-y); refreshMs=refreshSamples[15]; }
+    }
+    const raw=Math.min(.20,Math.max(0,delta/1000));
     lastFrame=now; simAccumulator+=raw;
     let steps=0;
     while(simAccumulator>=FIXED_DT && steps<MAX_CATCHUP_STEPS){
+      snapshotPrev();
       try{update(FIXED_DT,now)}catch(err){console.error('update',err)}
       simAccumulator-=FIXED_DT; steps++;
     }
     if(steps===MAX_CATCHUP_STEPS) simAccumulator=0;
     if(steps>0 && gameState==='PLAYING' && world){ try{updateHUD();}catch(err){console.error('HUD error',err);} }
-    // On high-refresh displays, skip redundant rasterization frames while keeping
-    // the fixed-step simulation deterministic at 60Hz.
-    if(!lastPresentedFrame || now-lastPresentedFrame>=TARGET_RENDER_MS-0.5){
-      try{draw(now); lastPresentedFrame=now}catch(err){console.error('draw',err)}
+    // 60/72/90Hz displays present every frame. Only 120Hz+ panels present every second frame (saves power/heat);
+    // the old "skip if the gap looks slightly short" rule dropped random frames on 60Hz and caused stutter.
+    presentParity^=1;
+    if(refreshMs>9.5 || presentParity){
+      try{ renderInterpolated(now); }catch(err){console.error('draw',err)}
     }
     gameFrameRaf=requestAnimationFrame(frame);
   }

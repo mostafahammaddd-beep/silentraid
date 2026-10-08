@@ -8791,3 +8791,19 @@ body.gameplay-fullscreen #gameScreen #gameCanvas {
 @keyframes srScreenIn{from{opacity:0}to{opacity:1}}
 .rs2.active.entering .rs2-stage{animation-delay:.2s}
 @media (prefers-reduced-motion:reduce){#gameScreen.rx-fail .game-wrap,#gameScreen.rx-success .game-wrap{animation:none}}
+
+
+/* ============================================================
+   FAST, SMOOTH SCREEN TRANSITIONS (compositor-only opacity)
+   ============================================================ */
+.screen.active.entering{z-index:2;animation:srScreenIn .22s ease-out both}
+#successScreen.active.entering,#failureScreen.active.entering{animation-duration:.28s}
+.rs2.active.entering .rs2-stage{animation-delay:.08s}
+/* black dip that covers the (unavoidable) moment a new maze is generated; it keeps animating on the compositor */
+#transitionVeil{position:fixed;inset:0;z-index:99990;background:#000;opacity:0;pointer-events:none;will-change:opacity}
+#transitionVeil.on{opacity:1;pointer-events:auto;transition:opacity .12s linear}
+#transitionVeil.off{opacity:0;pointer-events:none;transition:opacity .22s ease-out}
+/* the lost-round beat is short: a hit, not a pause */
+#gameScreen.rx-fail #roundEndFx{animation:rxFx .2s ease-out forwards}
+#gameScreen.rx-fail .game-wrap{animation:rxHit .2s cubic-bezier(.2,.8,.25,1) forwards}
+@keyframes rxHit{0%{transform:scale(1) translate(0,0)}25%{transform:scale(1.03) translate(-3px,1px)}55%{transform:scale(1.04) translate(3px,-1px)}100%{transform:scale(1.045) translate(0,0)}}
