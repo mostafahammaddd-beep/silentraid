@@ -149,7 +149,6 @@ public class MainActivity extends Activity {
         s.setDisplayZoomControls(false);
         s.setUseWideViewPort(true);
         s.setLoadWithOverviewMode(true);
-        s.setOffscreenPreRaster(true);
 
         mWebView.setWebChromeClient(new WebChromeClient());
         mWebView.setWebViewClient(new WebViewClient() {
@@ -220,6 +219,14 @@ public class MainActivity extends Activity {
         pendingPurpose = null;
         rewardedAd = null;
         if (mWebView != null) {
+            try {
+                mWebView.stopLoading();
+                mWebView.removeJavascriptInterface("SilentRaidAds");
+                mWebView.removeJavascriptInterface("SilentRaidAnalytics");
+                mWebView.removeJavascriptInterface("SilentRaidDevice");
+                android.view.ViewParent parent = mWebView.getParent();
+                if (parent instanceof android.view.ViewGroup) ((android.view.ViewGroup) parent).removeView(mWebView);
+            } catch (Throwable ignored) { }
             mWebView.destroy();
             mWebView = null;
         }

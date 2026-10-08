@@ -8767,3 +8767,8 @@ body.gameplay-fullscreen #gameScreen #gameCanvas {
 /* fix: keep the reward button full width inside its glow wrapper (beats the `all:unset` button reset) */
 .reward-wrap{display:block;width:100%;min-width:0}
 :is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 .reward-wrap #rewardContinueBtn{width:100% !important;min-width:100% !important;max-width:100% !important;box-sizing:border-box !important;display:flex !important}
+
+
+/* ---- performance: backdrop-filter re-blurs everything behind an element every frame (the live game canvas
+   included), which is a main cause of stutter on mid/low-end WebViews. Panels keep their translucent backgrounds. ---- */
+*,*::before,*::after{-webkit-backdrop-filter:none !important;backdrop-filter:none !important}

@@ -137,6 +137,24 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     };
   }
 
+  // Adaptive render quality. The canvas backing store shrinks a step when this device cannot hold ~45fps,
+  // and the learned level is remembered so the next launch starts from a sensible point instead of stuttering again.
+  const QUALITY_KEY='silent_raid_quality_v1';
+  const QUALITY_SCALES=[1,.8,.62];
+  let qualityLevel=0;
+  try{ qualityLevel=Math.max(0,Math.min(QUALITY_SCALES.length-1,(Number(localStorage.getItem(QUALITY_KEY))||0)-1)); }catch(_){}
+  let perfAcc=0, perfN=0;
+  function monitorFramePerformance(rawMs){
+    if(gameState!=='PLAYING' || rawMs>120) return;   // ignore pauses / ad overlays / tab switches
+    perfAcc+=rawMs; perfN++;
+    if(perfN<150) return;
+    const avg=perfAcc/perfN; perfAcc=0; perfN=0;
+    if(avg>23 && qualityLevel<QUALITY_SCALES.length-1){
+      qualityLevel++;
+      try{ localStorage.setItem(QUALITY_KEY,String(qualityLevel+1)); }catch(_){}
+      layoutGameSurface();
+    }
+  }
   function prepareLogicalGameplayWidth(){
     const {width,height}=getViewportSize();
     // Keep the original 4:3 layout on 4:3-or-narrower displays. On wider
@@ -146,10 +164,13 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
 
   function resizeGameSurface(){
     if(gameplaySurfaceLocked) return;
+    layoutGameSurface();
+  }
+  function layoutGameSurface(){
     const {width,height}=getViewportSize();
     // Keep a sharp backing store on every device. The cap avoids wasting memory
     // on 3x/4x panels while preserving the visual quality used on newer phones.
-    const dpr=Math.min(1.25,Math.max(1,window.devicePixelRatio||1));
+    const dpr=Math.max(.6,Math.min(1.25,Math.max(1,window.devicePixelRatio||1))*QUALITY_SCALES[qualityLevel]);
     viewport.width = width;
     viewport.height = height;
     viewport.dpr = dpr;
@@ -1136,15 +1157,16 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   function worldToCanvas(w,gx,gy){ return {x:w.ox+gx*w.cell+w.cell/2,y:w.oy+gy*w.cell+w.cell/2}; }
 
   const hudCache={levelText:null,seconds:null,keys:null,chase:null};
+  const hudNodes={};
   function updateHUD(){
     const stageNames = ['المرحلة البرونزية', 'المرحلة الفضية', 'المرحلة الذهبية', 'المرحلة الألماسية', 'المرحلة الأسطورية'];
     const stageName = stageNames[level.stage - 1] || `المرحلة ${level.stage}`;
-    const levelHud = document.getElementById('levelHud');
+    const levelHud = hudNodes.level || (hudNodes.level=document.getElementById('levelHud'));
     const levelText=`${stageName} • دور ${level.level}`;
     if(levelHud && hudCache.levelText!==levelText){levelHud.textContent=levelText;hudCache.levelText=levelText;}
     const sec=Math.max(0,Math.floor((world?.timer||0)+0.0001));
     const mm=String(Math.floor(sec/60)).padStart(2,'0'), ss=String(sec%60).padStart(2,'0');
-    const timerHud=document.getElementById('timerHud');
+    const timerHud=hudNodes.timer || (hudNodes.timer=document.getElementById('timerHud'));
     if(timerHud && hudCache.seconds!==sec){
       timerHud.textContent=`⏱ ${mm}:${ss}`;
       // Urgency colour classes
@@ -1153,7 +1175,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       timerHud.classList.toggle('hud-timer--crit', sec <= 10);
       hudCache.seconds=sec;
     }
-    const keysHud=document.getElementById('keysHud');
+    const keysHud=hudNodes.keys || (hudNodes.keys=document.getElementById('keysHud'));
     const collected = world?.player?.keys || 0;
     if(keysHud && hudCache.keys!==collected){
       keysHud.classList.add('keys-hud');
@@ -1166,10 +1188,9 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       keysHud.innerHTML = `<span class="keys-hud-title">المفاتيح</span><span class="keys-hud-slots">${slots}</span><span class="keys-hud-count">${collected}/3</span>`;
       hudCache.keys=collected;
     }
-    const chaseHud=document.getElementById('chaseHud');
-    const chaseRemaining=Math.max(0,...(world?.guards||[])
-      .filter(g=>g.state==='CHASE')
-      .map(g=>Math.ceil(Math.max(0,g.alertTimer||0))));
+    const chaseHud=hudNodes.chase || (hudNodes.chase=document.getElementById('chaseHud'));
+    let chaseRemaining=0;
+    if(world?.guards) for(let gi=0;gi<world.guards.length;gi++){const g=world.guards[gi]; if(g.state==='CHASE'){const r=Math.ceil(Math.max(0,g.alertTimer||0)); if(r>chaseRemaining) chaseRemaining=r;}}
     const chasing=chaseRemaining>0;
     const chaseText=chasing?`⚠ المطاردة: ${chaseRemaining} ث`:'';
     if(chaseHud && hudCache.chase!==chaseText){
@@ -1468,7 +1489,6 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
         world.wallMemory=Math.max(0,5-world.standstill);
       }else{
         world.standstill=0; world.wallMemory=5;
-        world.wallsDiscovered=collectNearbyWalls();
       }
       // Dynamic vision radius: when moving, expands smoothly up to 190px.
       // When stopped, collapses completely to 0 (bank is pitch black, only thief is visible).
@@ -1503,8 +1523,6 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     }catch(err){
       // Never let a single gameplay system abort the simulation loop.
       console.error('Silent Raid player subsystem error',err);
-    }finally{
-      try{updateHUD();}catch(err){console.error('HUD error',err);}
     }
   }
 
@@ -2505,7 +2523,9 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     const tx=(-viewport.cameraX*s)*viewport.dpr;
     const ty=(-viewport.cameraY*s)*viewport.dpr;
     ctx.setTransform(sx,0,0,sx,tx,ty);
-    drawWorld(now);
+    // Standing still collapses the light to nothing: the fog is then 100% opaque, so drawing the
+    // world underneath it is pure waste.
+    if((Number(world.lightRadius)||0)>2) drawWorld(now);
     drawLighting(now);
     drawHUDEffects();
   }
@@ -2534,6 +2554,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   // This preserves the existing floor/wall artwork exactly while removing the
   // persistent full-map offscreen canvas (the highest-risk GPU allocation on
   // older Android WebViews).
+  const bgToneBuf=[[],[],[],[],[],[],[]], bgWallBuf=[];
   function drawWorldBackground(target,w,bounds){
     const c=w.cell, bw=w.cols*c, bh=w.rows*c, p=w.palette;
     const minCol=Math.max(0,Math.floor((bounds.left-w.ox)/c)-1);
@@ -2552,7 +2573,8 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
 
     // Floor stone tiling. Same pixels as the per-cell version, but issued as a
     // handful of batched fills/strokes instead of ~4 canvas calls per tile.
-    const toneCells=[[],[],[],[],[],[],[]];
+    const toneCells=bgToneBuf;
+    for(let t=0;t<7;t++) toneCells[t].length=0;
     let floorCount=0;
     for(let y=minRow;y<=maxRow;y++) for(let x=minCol;x<=maxCol;x++) if(w.grid[y][x]===0){
       toneCells[((x*17+y*31+w.seed)>>>0)%7].push(x,y); floorCount++;
@@ -2560,7 +2582,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     if(floorCount){
       for(let t=0;t<7;t++){
         const cells=toneCells[t]; if(!cells.length) continue;
-        target.fillStyle=`rgba(${p.glow},${0.03+t*.005})`;
+        target.fillStyle=(w._toneStyles||(w._toneStyles=[0,1,2,3,4,5,6].map(i=>`rgba(${p.glow},${0.03+i*.005})`)))[t];
         target.beginPath();
         for(let i=0;i<cells.length;i+=2) target.rect(w.ox+cells[i]*c+1,w.oy+cells[i+1]*c+1,c-2,c-2);
         target.fill();
@@ -2588,7 +2610,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     // cached; every pass below is one batched canvas operation (previously each
     // wall issued its own blurred shadow fill, clip, fills and strokes).
     if(!w._wallShapes) w._wallShapes=new Array(w.rows*w.cols);
-    const wallList=[];
+    const wallList=bgWallBuf; wallList.length=0;
     for(let y=minRow;y<=maxRow;y++) for(let x=minCol;x<=maxCol;x++) if(w.grid[y][x]===1){
       const idx=y*w.cols+x;
       let sh=w._wallShapes[idx];
@@ -2626,9 +2648,9 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       };
       // 1) one blurred shadow + fill for every wall at once
       target.save();
-      target.shadowColor='rgba(0,0,0,.35)'; target.shadowBlur=5; target.shadowOffsetX=1.5; target.shadowOffsetY=2;
-      target.fillStyle=p.wall; addWalls(); target.fill();
+      target.translate(1.5,2); target.fillStyle='rgba(0,0,0,.30)'; addWalls(); target.fill();
       target.restore();
+      target.fillStyle=p.wall; addWalls(); target.fill();
       // 2) bottom shade + top highlight, clipped to the wall outlines
       target.save();
       addWalls(); target.clip();
@@ -2670,6 +2692,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     const CAMERA_RANGE=150;
     const CAMERA_HALF_ANGLE=0.25;
     world.cameras?.forEach(cam=>{
+      if(!inLitArea(cam.x,cam.y,CAMERA_RANGE+14)) return;
       ctx.save();ctx.translate(cam.x,cam.y);
       ctx.fillStyle='#a9a39a';ctx.strokeStyle=cam.trigger>0?'#d5222d':'#4f5660';ctx.lineWidth=1.3;
       ctx.beginPath();ctx.arc(0,0,6,0,Math.PI*2);ctx.fill();ctx.stroke();
@@ -2755,10 +2778,11 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   }
 
   function drawKeys(){
-    world.keys.forEach((k,i)=>{if(k.collected)return;ctx.save();ctx.translate(k.x,k.y);
+    world.keys.forEach((k,i)=>{if(k.collected||!inLitArea(k.x,k.y,30))return;ctx.save();ctx.translate(k.x,k.y);
       const bob=Math.sin(performance.now()*.004+i)*1.5;ctx.translate(0,bob);ctx.rotate(-.08);
       const pal=world.palette||STAGE_PALETTES.bronze;
-      ctx.shadowBlur=14;ctx.shadowColor=pal.accent||'#f0c96c';ctx.strokeStyle='#a66b28';ctx.fillStyle=pal.accent||'#d7a84b';ctx.lineWidth=1.4;
+      ctx.globalAlpha=.22;ctx.fillStyle=pal.accent||'#f0c96c';ctx.beginPath();ctx.arc(-2,0,15,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;
+      ctx.strokeStyle='#a66b28';ctx.fillStyle=pal.accent||'#d7a84b';ctx.lineWidth=1.4;
       ctx.beginPath();ctx.arc(-6,0,6,0,Math.PI*2);ctx.fill();ctx.stroke();
       ctx.fillStyle='#8b5a24';ctx.beginPath();ctx.arc(-6,0,2.6,0,Math.PI*2);ctx.fill();
       ctx.fillStyle='#d9ad55';ctx.fillRect(0,-2,15,4);ctx.fillRect(9,-2,3,7);ctx.fillRect(13,-2,3,5);
@@ -2767,12 +2791,14 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   }
 
   function drawVault(){
-    const v=world.vault; const p=stageHeistProps(world.theme, level.level);
+    const v=world.vault; if(!inLitArea(v.x,v.y,60)) return;
+    const p=world._heistProps||(world._heistProps=stageHeistProps(world.theme, level.level));
     ctx.save();ctx.translate(v.x,v.y);
     // Cartoon vault keeps the same 60×68 footprint so pickup bounds stay valid.
-    ctx.shadowColor='rgba(0,0,0,.45)';ctx.shadowBlur=16;
+    ctx.fillStyle='rgba(0,0,0,.22)';ctx.beginPath();roundedRectPath(ctx,-35,-30,70,74,13);ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,.2)';ctx.beginPath();roundedRectPath(ctx,-33,-32,66,72,12);ctx.fill();
     ctx.fillStyle=p.vaultOuter;
-    ctx.beginPath();roundedRectPath(ctx,-30,-34,60,68,10);ctx.fill();ctx.shadowBlur=0;
+    ctx.beginPath();roundedRectPath(ctx,-30,-34,60,68,10);ctx.fill();
     ctx.fillStyle=p.vaultShade;
     ctx.beginPath();roundedRectPath(ctx,-25,-29,50,58,8);ctx.fill();
     ctx.fillStyle=p.vaultFace;
@@ -2820,7 +2846,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     const panelW=(innerW-panelGap)/2;
     const maxShift=panelW+2;
 
-    const props=stageHeistProps(world.theme, level.level);
+    const props=world._heistProps||(world._heistProps=stageHeistProps(world.theme, level.level));
     const theme=world.theme||'bronze';
 
     ctx.fillStyle='#111820';
@@ -3063,8 +3089,13 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     target.restore();
   }
 
+  // Only objects that can touch the lit circle are worth drawing (everything else is under opaque fog).
+  function inLitArea(x,y,reach){
+    const p=world.player, l=Number(world.lightRadius)||0;
+    return Math.hypot(x-p.x,y-p.y)<=l+reach;
+  }
   function drawGuards(){
-    world.guards.forEach(g=>drawGuardVisual(ctx,g));
+    for(let i=0;i<world.guards.length;i++){ const g=world.guards[i]; if(inLitArea(g.x,g.y,175)) drawGuardVisual(ctx,g); }
   }
 
   function drawGuardVisual(target,g,menuStatic=false){
@@ -3074,7 +3105,6 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     if(!menuStatic){
       // ── FILLED DETECTION CIRCLE: GREEN IN PATROL, RED IN CHASE (SAME OPACITY) ──
       const circleColor = isChasing ? '#ef4444' : '#22c55e';
-      const circleShadow = isChasing ? '#ff3842' : '#22c55e';
 
       target.save();
       // Filled circle: identical smooth opacity
@@ -3088,11 +3118,16 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       target.globalAlpha = isChasing ? 0.42 : 0.32;
       target.strokeStyle = circleColor;
       target.lineWidth = isChasing ? 2.5 : 2.0;
-      target.shadowBlur = isChasing ? 16 : 10;
-      target.shadowColor = circleShadow;
       target.setLineDash(isChasing ? [10, 6] : [6, 8]);
       target.beginPath();
       target.arc(g.x, g.y, dangerR, 0, Math.PI * 2);
+      // soft glow = one wider, fainter pass (a canvas shadowBlur here cost a CPU blur per guard per frame)
+      const strokeAlpha = target.globalAlpha;
+      target.globalAlpha = strokeAlpha * .35;
+      target.lineWidth = (isChasing ? 2.5 : 2.0) + 6;
+      target.stroke();
+      target.globalAlpha = strokeAlpha;
+      target.lineWidth = isChasing ? 2.5 : 2.0;
       target.stroke();
       target.setLineDash([]);
 
@@ -4448,6 +4483,9 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
 
   let simAccumulator=0;
   const FIXED_DT=1/60;
+  // On a slow device a long frame must not queue many extra simulation steps: that makes the next
+  // frame even longer (a death spiral). Two steps max; the game then simply runs slightly slower.
+  const MAX_CATCHUP_STEPS=2;
   // Keep simulation at a stable 60Hz while avoiding duplicate full Canvas renders
   // on 90/120Hz displays. This reduces GPU/CPU pressure without changing gameplay timing.
   const TARGET_RENDER_MS=1000/60;
@@ -4473,14 +4511,16 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
 
   function frame(now){
     if(!gameLoopActive) return;
+    monitorFramePerformance(now-lastFrame);
     const raw=Math.min(.20,Math.max(0,(now-lastFrame)/1000));
     lastFrame=now; simAccumulator+=raw;
     let steps=0;
-    while(simAccumulator>=FIXED_DT && steps<4){
+    while(simAccumulator>=FIXED_DT && steps<MAX_CATCHUP_STEPS){
       try{update(FIXED_DT,now)}catch(err){console.error('update',err)}
       simAccumulator-=FIXED_DT; steps++;
     }
-    if(steps===4) simAccumulator=0;
+    if(steps===MAX_CATCHUP_STEPS) simAccumulator=0;
+    if(steps>0 && gameState==='PLAYING' && world){ try{updateHUD();}catch(err){console.error('HUD error',err);} }
     // On high-refresh displays, skip redundant rasterization frames while keeping
     // the fixed-step simulation deterministic at 60Hz.
     if(!lastPresentedFrame || now-lastPresentedFrame>=TARGET_RENDER_MS-0.5){
