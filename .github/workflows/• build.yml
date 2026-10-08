@@ -6,18 +6,55 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30          # لو علّق لأي سبب يقفل لوحده ويظهر خطأ بدل ما يفضل يحمّل
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check project layout
+        run: |
+          if [ ! -f SilentRaid/settings.gradle ]; then
+            echo "::error::مجلد SilentRaid مش في جذر المستودع. الموجود:"
+            find . -maxdepth 3 -not -path './.git*' | head -50
+            exit 1
+          fi
+          ls -la SilentRaid
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.9'
+          gradle-version: '8.13'
+          cache-disabled: true     # الكاش كان ممكن يعلّق خطوة الإعداد/الحفظ
+
+      - name: Prepare signing key (from GitHub secrets)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/keystore.p12"
+            echo "KEYSTORE_PATH=$RUNNER_TEMP/keystore.p12" >> "$GITHUB_ENV"
+          else
+            echo "::warning::KEYSTORE_BASE64 secret is missing - the APK will be built UNSIGNED."
+          fi
+
+      - name: Check AdMob ids
+        run: |
+          if grep -q "ca-app-pub-3940256099942544" SilentRaid/app/src/main/res/values/strings.xml; then
+            echo "::warning::AdMob TEST ids are still in strings.xml - replace them with your own before publishing."
+          fi
+
       - name: Build release APK
-        run: gradle -p SilentRaid assembleRelease --no-daemon
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: gradle -p SilentRaid assembleRelease --no-daemon --stacktrace --console=plain
+
       - uses: actions/upload-artifact@v4
         with:
           name: SilentRaid-APK
           path: SilentRaid/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
