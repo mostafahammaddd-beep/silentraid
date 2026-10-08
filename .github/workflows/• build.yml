@@ -37,7 +37,7 @@ jobs:
             echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/keystore.p12"
             echo "KEYSTORE_PATH=$RUNNER_TEMP/keystore.p12" >> "$GITHUB_ENV"
           else
-            echo "::warning::KEYSTORE_BASE64 secret is missing - the APK will be built UNSIGNED."
+            echo "::warning::KEYSTORE_BASE64 secret is missing - the APK is signed with the bundled sideload key (installable, but NOT for Google Play)."
           fi
 
       - name: Check AdMob ids
