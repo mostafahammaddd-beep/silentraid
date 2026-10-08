@@ -18,20 +18,33 @@ android {
         versionName '1.0.17'
     }
 
-    // ---- Signing: the key is NOT stored in the project. ----
-    // Provide it through environment variables (GitHub Actions secrets) or a local keystore.p12 next to settings.gradle
-    // that is git-ignored. Without a key the release APK is built unsigned instead of failing.
+    // ---- Signing: an APK that is NOT signed cannot be installed on a phone ("package appears to be invalid"). ----
+    // 1) If you provide your own key (GitHub secrets KEYSTORE_BASE64 / KEYSTORE_PASSWORD / KEY_ALIAS / KEY_PASSWORD,
+    //    or a local keystore.p12 next to settings.gradle), the release APK is signed with YOUR key (use this for Google Play).
+    // 2) Otherwise the release APK is signed with the bundled sideload key (app/sideload-keystore.p12) so it always installs.
+    //    That key is public, so it is only for testing / direct installs - never publish a store build signed with it.
     def ksFile = System.getenv('KEYSTORE_PATH') ? file(System.getenv('KEYSTORE_PATH')) : file('../keystore.p12')
     def hasKeystore = ksFile.exists() && System.getenv('KEYSTORE_PASSWORD')
 
-    if (hasKeystore) {
-        signingConfigs {
+    signingConfigs {
+        sideload {
+            storeFile file('sideload-keystore.p12')
+            storeType 'pkcs12'
+            storePassword 'silentraid'
+            keyAlias 'silentraid'
+            keyPassword 'silentraid'
+            enableV1Signing true
+            enableV2Signing true
+        }
+        if (hasKeystore) {
             release {
                 storeFile ksFile
                 storeType 'pkcs12'
                 storePassword System.getenv('KEYSTORE_PASSWORD')
                 keyAlias System.getenv('KEY_ALIAS') ?: 'silentraid'
                 keyPassword System.getenv('KEY_PASSWORD') ?: System.getenv('KEYSTORE_PASSWORD')
+                enableV1Signing true
+                enableV2Signing true
             }
         }
     }
@@ -40,7 +53,7 @@ android {
         release {
             minifyEnabled false
             shrinkResources false
-            if (hasKeystore) signingConfig signingConfigs.release
+            signingConfig hasKeystore ? signingConfigs.release : signingConfigs.sideload
         }
     }
 

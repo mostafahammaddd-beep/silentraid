@@ -4,3 +4,7 @@
 local.properties
 build/
 .gradle/
+
+# the bundled sideload key must be committed (see app/build.gradle)
+!sideload-keystore.p12
+!app/sideload-keystore.p12

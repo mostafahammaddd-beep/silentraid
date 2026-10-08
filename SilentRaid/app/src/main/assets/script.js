@@ -69,6 +69,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   let W = BASE_W;
   const ctx = canvas.getContext('2d', { alpha: false });
   ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
 
   const thiefEmptyPoses = {
     left: new Image(),
@@ -140,10 +141,75 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   // Adaptive render quality. The canvas backing store shrinks a step when this device cannot hold ~45fps,
   // and the learned level is remembered so the next launch starts from a sensible point instead of stuttering again.
   const QUALITY_KEY='silent_raid_quality_v1';
-  const QUALITY_SCALES=[1,.8,.62];
+  const QUALITY_SCALES=[1,.85,.72,.6];
   let qualityLevel=0;
-  try{ qualityLevel=Math.max(0,Math.min(QUALITY_SCALES.length-1,(Number(localStorage.getItem(QUALITY_KEY))||0)-1)); }catch(_){}
+  // The last measured level is the starting guess; the launch benchmark below replaces it within ~0.5s.
+  try{ qualityLevel=Math.max(0,Math.min(QUALITY_SCALES.length-1,(Number(localStorage.getItem(QUALITY_KEY))||1)-1)); }catch(_){}
+  const BENCH_BUDGET_MS=6.5;   // GPU+CPU cost allowed for one benchmark frame so real gameplay keeps headroom for 60fps
+  // Launch benchmark: renders a gameplay-like frame (floor gradient, tiles, walls, guard rings, sprite, full-screen fog)
+  // on a hidden canvas at each quality tier, best first, and keeps the best tier that fits the budget. One GPU flush
+  // per tier makes the timing include real rasterisation, not just JS. Runs once, before the player taps "start".
+  function calibrateRenderQuality(schedule){
+    schedule=schedule||((fn)=>setTimeout(fn,0));
+    let width,height;
+    try{ ({width,height}=getViewportSize()); }catch(_){ return; }
+    let baseDpr=Math.min(2,Math.max(1,window.devicePixelRatio||1));
+    baseDpr=Math.min(baseDpr,Math.sqrt(2.6e6/Math.max(1,width*height)));
+    const spriteCv=document.createElement('canvas'); spriteCv.width=spriteCv.height=128;
+    try{ const sg=spriteCv.getContext('2d'); const gr=sg.createRadialGradient(50,44,6,64,64,60); gr.addColorStop(0,'#f5d28a'); gr.addColorStop(1,'#3a2a14'); sg.fillStyle=gr; sg.beginPath(); sg.arc(64,64,60,0,Math.PI*2); sg.fill(); }catch(_){}
+    let tier=0; const costs=[];
+    const finish=(chosen)=>{
+      qualityLevel=chosen;
+      try{ localStorage.setItem(QUALITY_KEY,String(chosen+1)); }catch(_){}
+      perfAcc=0; perfN=0;
+      try{ layoutGameSurface(); }catch(_){}
+      window.__srQuality={level:chosen,costsMs:costs.map(v=>Math.round(v*10)/10)};
+    };
+    const step=()=>{
+      if(tier>=QUALITY_SCALES.length){ finish(QUALITY_SCALES.length-1); return; }
+      const dpr=Math.max(.75,baseDpr*QUALITY_SCALES[tier]);
+      let ms=Infinity;
+      try{
+        const c=document.createElement('canvas'); c.width=Math.max(1,Math.round(width*dpr)); c.height=Math.max(1,Math.round(height*dpr));
+        const g=c.getContext('2d');
+        const paint=(k)=>{
+          g.setTransform(dpr,0,0,dpr,0,0);
+          g.fillStyle='#090a0c'; g.fillRect(0,0,width,height);
+          const lg=g.createLinearGradient(0,0,width,height); lg.addColorStop(0,'#3b342c'); lg.addColorStop(1,'#171411');
+          g.fillStyle=lg; g.fillRect(0,0,width,height);
+          g.fillStyle='rgba(240,201,108,.05)'; g.beginPath();
+          for(let i=0;i<160;i++) g.rect((i*37)%width,(i*53+k)%height,30,30); g.fill();
+          g.strokeStyle='rgba(212,184,120,.4)'; g.lineWidth=1; g.beginPath();
+          for(let i=0;i<160;i++) g.rect(((i*37)%width)+.5,((i*53+k)%height)+.5,29,29); g.stroke();
+          g.fillStyle='#4a4038'; g.beginPath();
+          for(let i=0;i<90;i++){ const x=(i*61)%width,y=(i*29)%height; g.moveTo(x,y); g.lineTo(x+34,y+4); g.lineTo(x+30,y+30); g.lineTo(x+2,y+26); g.closePath(); }
+          g.fill();
+          for(let i=0;i<3;i++){
+            const x=width*(.25+i*.25), y=height*.5;
+            g.globalAlpha=.09; g.fillStyle='#22c55e'; g.beginPath(); g.arc(x,y,122,0,Math.PI*2); g.fill();
+            g.globalAlpha=.32; g.strokeStyle='#22c55e'; g.setLineDash([6,8]); g.lineWidth=8; g.stroke(); g.lineWidth=2; g.stroke(); g.setLineDash([]);
+            g.globalAlpha=1;
+          }
+          g.drawImage(spriteCv,width/2-60+(k%5),height/2-60,120,120);
+          const R=Math.min(width,height)*.5, fg=g.createRadialGradient(width/2,height/2,R*.35,width/2,height/2,R);
+          fg.addColorStop(0,'rgba(0,0,0,0)'); fg.addColorStop(.88,'rgba(0,0,0,.55)'); fg.addColorStop(1,'rgba(0,0,0,1)');
+          g.fillStyle=fg; g.fillRect(0,0,width,height);
+        };
+        paint(0); g.getImageData(0,0,1,1);                 // warm-up: shader/texture creation is not timed
+        const frames=6, t0=performance.now();
+        for(let f=1;f<=frames;f++) paint(f);
+        g.getImageData(0,0,1,1);                           // flush the GPU queue so the clock includes rasterisation
+        ms=(performance.now()-t0)/frames;
+        c.width=c.height=0;
+      }catch(_){ ms=Infinity; }
+      costs.push(ms);
+      if(ms<=BENCH_BUDGET_MS){ finish(tier); return; }
+      tier++; schedule(step);
+    };
+    schedule(step);
+  }
   let perfAcc=0, perfN=0;
+  let thiefSpriteCache=new WeakMap();
   function monitorFramePerformance(rawMs){
     if(gameState!=='PLAYING' || rawMs>120) return;   // ignore pauses / ad overlays / tab switches
     perfAcc+=rawMs; perfN++;
@@ -170,7 +236,12 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     const {width,height}=getViewportSize();
     // Keep a sharp backing store on every device. The cap avoids wasting memory
     // on 3x/4x panels while preserving the visual quality used on newer phones.
-    const dpr=Math.max(.6,Math.min(1.25,Math.max(1,window.devicePixelRatio||1))*QUALITY_SCALES[qualityLevel]);
+    // Render at the screen's real resolution (up to 2x) so walls, guards and the thief are crisp. A total pixel
+    // budget keeps big tablets cheap, and the adaptive quality step lowers it only if the device cannot keep up.
+    let dpr=Math.min(2,Math.max(1,window.devicePixelRatio||1));
+    dpr=Math.min(dpr,Math.sqrt(2.6e6/Math.max(1,width*height)));
+    dpr=Math.max(.75,dpr*QUALITY_SCALES[qualityLevel]);
+    thiefSpriteCache=new WeakMap();
     viewport.width = width;
     viewport.height = height;
     viewport.dpr = dpr;
@@ -529,6 +600,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     // Lock before the CSS screen transition can provoke any WebView resize.
     // Landscape gameplay has no legitimate viewport resize during a round.
     gameplaySurfaceLocked = next === 'PLAYING';
+    const crossfade = gameState==='PLAYING' && (next==='SUCCESS'||next==='FAILURE');
     gameState = next;
     // The gameplay host is already edge-to-edge. Toggling this old body class
     // activated several legacy, conflicting fixed/100vw/100vh rule sets in the
@@ -554,6 +626,15 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       el.style.removeProperty('visibility');
       el.style.removeProperty('pointer-events');
     });
+    if(next==='PLAYING') screens.PLAYING?.classList.remove('rx-fail','rx-success');
+    Object.values(screens).forEach(el=>{ if(el){ el.classList.remove('leaving','entering'); } });
+    if(crossfade){
+      // Keep the frozen game frame underneath while the result screen fades in on top: no hard cut to black.
+      screens.PLAYING?.classList.add('leaving');
+      screens[next]?.classList.add('entering');
+      clearTimeout(setState._xf);
+      setState._xf=setTimeout(()=>{ Object.values(screens).forEach(el=>el&&el.classList.remove('leaving','entering')); },760);
+    }
     if (next !== 'PLAYING') resetInput();
 
     // The uploaded MP3 is the single background track for MENU + LEVELS.
@@ -1149,6 +1230,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     resetRewardState();
     world.timerStart=Math.max(1,Number(world.timer)||1);
     initSpotHud();
+    screens.PLAYING?.classList.remove('rx-fail','rx-success');
     track('level_start',{level_name:levelName(),stage:level.stage,level:level.level});
     world.timerRunning=true;
     isMapFullyLoaded = Array.isArray(world.grid)&&world.grid.length>0&&world.player&&Number.isFinite(world.player.x)&&Number.isFinite(world.player.y)&&world.keys.length===3;
@@ -2170,6 +2252,12 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     pendingRewardPurpose=null; rewardAdInFlight=false;
     if(rewardAdTimer){clearTimeout(rewardAdTimer);rewardAdTimer=null;}
   }
+  function beginRoundEndFx(kind){
+    const gs=screens.PLAYING; if(!gs) return;
+    gs.classList.remove('rx-fail','rx-success');
+    void gs.offsetWidth;
+    gs.classList.add(kind==='fail'?'rx-fail':'rx-success');
+  }
   function fail(msg, purpose='caught'){
     if(!isMapFullyLoaded||isGameOver)return;
     isGameOver=true;
@@ -2186,10 +2274,15 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     const failureText=document.querySelector('#failureScreen .rs2-sub');
     if(failureTitle) failureTitle.textContent=spotted?'انكشف أمرك!':(purpose==='time'?'انتهى الوقت!':'اتمسكت!');
     if(failureText) failureText.textContent=spotted?'تم رصدك مرات كثيرة':(purpose==='time'?'انتهى الوقت قبل أن تهرب بالمسروقات.':'أحاط بك رجال الأمن وأُغلقت العملية.');
-    setState('FAILURE');
+    // A short, deliberate beat on the frozen last frame (red vignette + punch), then a cross-fade to the result screen.
+    beginRoundEndFx('fail');
     recordResult(false);
     haptic([120,70,220]);
-    fadeGameOverMusicIn();
+    setTimeout(()=>{
+      if(!isGameOver || gameState!=='PLAYING') return;
+      setState('FAILURE');
+      fadeGameOverMusicIn();
+    },520);
   }
 
   function requestRewardContinue(){
@@ -2495,6 +2588,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     markRoundCompleted(level.stage,level.level);
     const result=recordResult(true);
     // Keep the success SFX aligned with the result transition.
+    beginRoundEndFx('success');
     setTimeout(()=>{
       if(!isGameOver)return;
       setState('SUCCESS');
@@ -3043,7 +3137,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       const padTop = Math.max(0, img.naturalHeight - THIEF_SPRITE_CANVAS);
       const dy = -drawH * ((THIEF_SPRITE_ANCHOR_Y + padTop) / THIEF_SPRITE_CANVAS);
       const drawHImg = drawH * (img.naturalHeight / THIEF_SPRITE_CANVAS);
-      target.drawImage(img, dx, dy, drawW, drawHImg);
+      target.drawImage(sharpSprite(target,img,drawW,drawHImg), dx, dy, drawW, drawHImg);
       if(hasLoot) drawLootBagFill(target, poseKey);
 
       // Cohesive subtle blocky/square toon highlights matching the guard's blocky aesthetic on menu
@@ -3066,6 +3160,30 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     }
 
     target.restore();
+  }
+
+  // A direct 480px -> ~120px drawImage uses plain bilinear sampling and shimmers/aliases ("pixelated").
+  // Pre-scale once per size with repeated halving, then blit ~1:1.
+  function sharpSprite(target,img,logicalW,logicalH){
+    try{
+      const m=target.getTransform(); const eff=Math.hypot(m.a,m.b);
+      const dw=Math.max(8,Math.round(logicalW*eff/4)*4), dh=Math.max(8,Math.round(logicalH*eff/4)*4);
+      if(img.naturalWidth<=dw*1.34) return img;
+      let perImg=thiefSpriteCache.get(img); if(!perImg){perImg=new Map();thiefSpriteCache.set(img,perImg);}
+      const key=dw+'x'+dh; let out=perImg.get(key);
+      if(out) return out;
+      let cur=img, cw=img.naturalWidth, ch=img.naturalHeight;
+      while(cw/2>=dw*1.01){
+        const nw=Math.ceil(cw/2), nh=Math.ceil(ch/2);
+        const c=document.createElement('canvas'); c.width=nw; c.height=nh;
+        const cx=c.getContext('2d'); cx.imageSmoothingEnabled=true; cx.imageSmoothingQuality='high'; cx.drawImage(cur,0,0,nw,nh);
+        cur=c; cw=nw; ch=nh;
+      }
+      out=document.createElement('canvas'); out.width=dw; out.height=dh;
+      const ox=out.getContext('2d'); ox.imageSmoothingEnabled=true; ox.imageSmoothingQuality='high'; ox.drawImage(cur,0,0,dw,dh);
+      perImg.set(key,out);
+      return out;
+    }catch(_){ return img; }
   }
 
   function drawLootBagFill(target,poseKey){
@@ -3318,7 +3436,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     const thief=document.getElementById('menuThiefActor');
     const guard=document.getElementById('menuGuardActor');
     if(!thief||!guard)return;
-    const dpr=Math.min(1.25,window.devicePixelRatio||1);
+    const dpr=Math.min(2.5,Math.max(1,window.devicePixelRatio||1));   // drawn once, so full sharpness is cheap
     const size=460;
     const scale=5.725;
     for(const [canvas,type] of [[thief,'thief'],[guard,'guard']]){
@@ -4539,6 +4657,8 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   renderMenuActorsOnce();
   renderLevelSelect();
   setState('MENU');
+  // Pick the best resolution this phone can sustain right away, before the player reaches the first round.
+  setTimeout(()=>requestAnimationFrame(()=>calibrateRenderQuality()),250);
   // Best-effort audible autoplay. Browsers may block it until a normal page interaction.
   // When the user disabled music, do not start a muted background stream at all.
   if(musicEnabled){

@@ -8772,3 +8772,22 @@ body.gameplay-fullscreen #gameScreen #gameCanvas {
 /* ---- performance: backdrop-filter re-blurs everything behind an element every frame (the live game canvas
    included), which is a main cause of stutter on mid/low-end WebViews. Panels keep their translucent backgrounds. ---- */
 *,*::before,*::after{-webkit-backdrop-filter:none !important;backdrop-filter:none !important}
+
+
+/* ============================================================
+   ROUND-END TRANSITION: beat on the frozen frame, then cross-fade
+   ============================================================ */
+#roundEndFx{position:absolute;inset:0;z-index:40;pointer-events:none;opacity:0;will-change:opacity}
+#gameScreen.rx-fail #roundEndFx{background:radial-gradient(ellipse at 50% 50%,rgba(90,0,8,0) 18%,rgba(150,10,22,.5) 68%,rgba(30,0,4,.94) 100%);animation:rxFx .5s ease-out forwards}
+#gameScreen.rx-success #roundEndFx{background:radial-gradient(ellipse at 50% 50%,rgba(255,236,150,0) 15%,rgba(255,196,60,.34) 70%,rgba(36,22,0,.78) 100%);animation:rxFx 1s ease-in forwards}
+@keyframes rxFx{from{opacity:0}to{opacity:1}}
+#gameScreen.rx-fail .game-wrap{animation:rxPunchFail .52s cubic-bezier(.2,.8,.25,1) forwards}
+#gameScreen.rx-success .game-wrap{animation:rxPushSuccess 1s ease-in-out forwards}
+@keyframes rxPunchFail{0%{transform:scale(1) translate(0,0)}14%{transform:scale(1.03) translate(-5px,2px)}28%{transform:scale(1.035) translate(5px,-2px)}42%{transform:scale(1.04) translate(-2px,1px)}100%{transform:scale(1.05) translate(0,0)}}
+@keyframes rxPushSuccess{from{transform:scale(1)}to{transform:scale(1.035)}}
+/* old screen stays painted under the new one; the new one fades in over it */
+.screen.leaving:not(.active){display:grid !important;opacity:1;visibility:visible;pointer-events:none;z-index:1}
+.screen.active.entering{z-index:2;animation:srScreenIn .62s cubic-bezier(.3,.6,.3,1) both}
+@keyframes srScreenIn{from{opacity:0}to{opacity:1}}
+.rs2.active.entering .rs2-stage{animation-delay:.2s}
+@media (prefers-reduced-motion:reduce){#gameScreen.rx-fail .game-wrap,#gameScreen.rx-success .game-wrap{animation:none}}
