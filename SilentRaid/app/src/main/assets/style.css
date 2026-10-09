@@ -8777,36 +8777,21 @@ body.gameplay-fullscreen #gameScreen #gameCanvas {
 /* ============================================================
    ROUND-END TRANSITION: beat on the frozen frame, then cross-fade
    ============================================================ */
-#roundEndFx{position:absolute;inset:0;z-index:40;pointer-events:none;opacity:0;will-change:opacity}
-#gameScreen.rx-fail #roundEndFx{background:radial-gradient(ellipse at 50% 50%,rgba(90,0,8,0) 18%,rgba(150,10,22,.5) 68%,rgba(30,0,4,.94) 100%);animation:rxFx .5s ease-out forwards}
-#gameScreen.rx-success #roundEndFx{background:radial-gradient(ellipse at 50% 50%,rgba(255,236,150,0) 15%,rgba(255,196,60,.34) 70%,rgba(36,22,0,.78) 100%);animation:rxFx 1s ease-in forwards}
-@keyframes rxFx{from{opacity:0}to{opacity:1}}
-#gameScreen.rx-fail .game-wrap{animation:rxPunchFail .52s cubic-bezier(.2,.8,.25,1) forwards}
-#gameScreen.rx-success .game-wrap{animation:rxPushSuccess 1s ease-in-out forwards}
-@keyframes rxPunchFail{0%{transform:scale(1) translate(0,0)}14%{transform:scale(1.03) translate(-5px,2px)}28%{transform:scale(1.035) translate(5px,-2px)}42%{transform:scale(1.04) translate(-2px,1px)}100%{transform:scale(1.05) translate(0,0)}}
-@keyframes rxPushSuccess{from{transform:scale(1)}to{transform:scale(1.035)}}
 /* old screen stays painted under the new one; the new one fades in over it */
 .screen.leaving:not(.active){display:grid !important;opacity:1;visibility:visible;pointer-events:none;z-index:1}
 .screen.active.entering{z-index:2;animation:srScreenIn .62s cubic-bezier(.3,.6,.3,1) both}
 @keyframes srScreenIn{from{opacity:0}to{opacity:1}}
-.rs2.active.entering .rs2-stage{animation-delay:.2s}
-@media (prefers-reduced-motion:reduce){#gameScreen.rx-fail .game-wrap,#gameScreen.rx-success .game-wrap{animation:none}}
 
 
 /* ============================================================
    FAST, SMOOTH SCREEN TRANSITIONS (compositor-only opacity)
    ============================================================ */
 .screen.active.entering{z-index:2;animation:srScreenIn .22s ease-out both}
-#successScreen.active.entering,#failureScreen.active.entering{animation-duration:.28s}
-.rs2.active.entering .rs2-stage{animation-delay:.08s}
+#successScreen.active.entering,#failureScreen.active.entering{animation-duration:.15s}
 /* black dip that covers the (unavoidable) moment a new maze is generated; it keeps animating on the compositor */
 #transitionVeil{position:fixed;inset:0;z-index:99990;background:#000;opacity:0;pointer-events:none;will-change:opacity}
 #transitionVeil.on{opacity:1;pointer-events:auto;transition:opacity .12s linear}
 #transitionVeil.off{opacity:0;pointer-events:none;transition:opacity .22s ease-out}
-/* the lost-round beat is short: a hit, not a pause */
-#gameScreen.rx-fail #roundEndFx{animation:rxFx .2s ease-out forwards}
-#gameScreen.rx-fail .game-wrap{animation:rxHit .2s cubic-bezier(.2,.8,.25,1) forwards}
-@keyframes rxHit{0%{transform:scale(1) translate(0,0)}25%{transform:scale(1.03) translate(-3px,1px)}55%{transform:scale(1.04) translate(3px,-1px)}100%{transform:scale(1.045) translate(0,0)}}
 
 
 /* ---- level card pressed: the whole level-select screen vanishes instantly (nothing lingers under the fade) ---- */
@@ -8816,3 +8801,43 @@ body.gameplay-fullscreen #gameScreen #gameCanvas {
 /* ---- result screens: heavy decorative loops start only after the cross-fade has finished ---- */
 .rs2.entering .chain,.rs2.entering .rs2-bokeh i,.rs2.entering .rs2-bag-rays,.rs2.entering .rs2-bag-halo,
 .rs2.entering .rs2-siren-rays,.rs2.entering .rs2-siren-halo,.rs2.entering .rs2-glow,.rs2.entering .rs2-flash{animation-play-state:paused !important}
+
+/* app stays hidden until the menu art is decoded, then everything appears together */
+html.sr-boot #app{opacity:0;pointer-events:none}
+#app{transition:opacity .18s ease-out}
+
+
+/* ===== Result screens: match reference art (win + fail) ===== */
+/* win */
+#successScreen.rs2-win .rs2-brush{display:none !important}
+#successScreen .rs2-bag{top:1.3em}
+#successScreen.rs2-win .rs2-bg{background:radial-gradient(ellipse 80% 90% at 50% 28%,#1f3350 0%,#0e1830 40%,#04070e 100%)}
+#successScreen .sr-star-zone{min-width:40em;border-radius:2em;border:.16em solid rgba(255,200,70,.55);background:rgba(8,8,12,.55)}
+#successScreen .sr-win-stars .sr-star:nth-child(2) svg{transform:none}
+#successScreen .sr-win-stars .sr-star .sr-star-off{fill:#2a2b31;stroke:#6d7078}
+#successScreen .rs2-subrow{gap:1.2em}
+#successScreen .rs2-subrow i{flex:none;width:2.4em;max-width:none;height:.24em;background:#f5b82a !important;box-shadow:none !important}
+#app #successScreen.rs2 p#rsMessage.rs2-sub{font-weight:600;color:#ececf0}
+/* fail */
+#failureScreen .sr-fail-stars{min-width:40em;border-radius:1.4em;border:.16em solid rgba(255,70,70,.7);background:rgba(10,6,10,.6)}
+.sr-fail-row .sr-star .sr-star-off{fill:#4a0f1a;stroke:#e5333f;stroke-width:3.4}
+.sr-fail-count{color:#fff}
+.reward-thief{width:auto;height:4.3em}
+.reward-sep{position:absolute;left:10.2em;top:50%;width:.14em;height:3.6em;margin-top:-1.8em;background:rgba(42,23,0,.65);pointer-events:none;z-index:1}
+
+/* ===== Result screens v2: bigger bag/siren, bigger titles, chains only at the edges ===== */
+#successScreen .rs2-bag{width:19em;height:17.4em;margin-left:-9.5em;top:-4.6em}
+#failureScreen .rs2-siren{width:15em;height:12em;margin-left:-7.5em;top:-4.6em}
+#successScreen.rs2-win .rs2-card{height:35em}
+#failureScreen.rs2-fail .rs2-card{height:37.5em}
+#successScreen .rs2-titlewrap,#failureScreen .rs2-titlewrap{height:9em}
+:is(#failureScreen,#successScreen):is(#failureScreen,#successScreen).rs2 h2.rs2-title{font-size:7.4em}
+#failureScreen .rs2-brush{width:56em;height:10.4em}
+#failureScreen .rs2-cuffs{width:12em}
+#failureScreen .rs2-chains .chain-wrap:nth-child(3),#failureScreen .rs2-chains .chain-wrap:nth-child(4){display:none}
+#successScreen .sr-star-zone{min-width:46em}
+#failureScreen .sr-fail-stars{min-width:46em}
+#successScreen .rs2-stage{height:50em;margin-top:-25em}
+#successScreen.rs2-win .rs2-card{height:38em}
+#successScreen .rs2-bag{width:17em;height:15.6em;margin-left:-8.5em;top:.4em}
+#failureScreen .rs2-siren{top:-2.4em}

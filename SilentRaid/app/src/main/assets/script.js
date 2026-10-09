@@ -140,7 +140,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   const QUALITY_KEY='silent_raid_quality_v1';
   const RENDER_DPR_CAP=2.5;          // sharper than before (was 2); the launch benchmark steps down on phones that can't hold it
   const RENDER_PIXEL_BUDGET=3.4e6;   // total backing-store pixels at the top tier
-  const QUALITY_SCALES=[1,.85,.72,.6];
+  const QUALITY_SCALES=[1,.9,.8,.7];
   let qualityLevel=0;
   // The last measured level is the starting guess; the launch benchmark below replaces it within ~0.5s.
   try{ qualityLevel=Math.max(0,Math.min(QUALITY_SCALES.length-1,(Number(localStorage.getItem(QUALITY_KEY))||1)-1)); }catch(_){}
@@ -172,7 +172,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   //    Weak phone: tier 0 is measured once, the other tiers are PREDICTED (cost scales with pixel count),
   //    and only the chosen tier is verified -> never more than a handful of slices.
   //  * Median of batches, so one GC pause / background task cannot skew the result.
-  const BENCH_BUDGET_MS=8;
+  const BENCH_BUDGET_MS=10;
   function createBenchTier(width,height,dpr,spriteCv){
     const c=document.createElement('canvas');
     c.width=Math.max(1,Math.round(width*dpr)); c.height=Math.max(1,Math.round(height*dpr));
@@ -488,8 +488,9 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   const TOTAL_LEVELS = 35;
   const UNLOCK_KEY = 'silent_raid_v9_unlocked_rounds_v1';
   const LEGACY_UNLOCK_KEY = 'silent_raid_v8_unlocked_rounds_v1';
-  const DEFAULT_UNLOCKED = 15;
+  const DEFAULT_UNLOCKED = 35;
   function getUnlockedTurn(){
+    return TOTAL_LEVELS;
     try{
       const saved=Number(localStorage.getItem(UNLOCK_KEY));
       if(Number.isFinite(saved)&&saved>=1) return Math.min(TOTAL_LEVELS,Math.floor(saved));
@@ -660,7 +661,6 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       el.style.removeProperty('pointer-events');
     });
     if(next==='LEVELS') document.getElementById('levelSelectScreen')?.classList.remove('ls-launching');
-    if(next==='PLAYING') screens.PLAYING?.classList.remove('rx-fail','rx-success');
     Object.values(screens).forEach(el=>{ if(el){ el.classList.remove('leaving','entering'); } });
     if(prevState!==next && screens[prevState] && screens[next]){
       // Every screen change: the old screen stays painted underneath while the new one fades in on top
@@ -903,43 +903,28 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     // locations cannot be predicted from map corners or previous runs. A small
     // gap only prevents stacking on the same tile / spawning on the player.
     const keyCells=[];
-    const keyMinGap=4;
-    const minPlayerGap=4;
-    const pool=floor.filter(c=>{
-      const k=c.join(',');
-      if(used.has(k)||reserved.has(k)) return false;
-      return Math.abs(c[0]-playerCell[0])+Math.abs(c[1]-playerCell[1])>=minPlayerGap;
-    });
-    for(let i=pool.length-1;i>0;i--){
-      const j=rng.int(0,i);
-      const tmp=pool[i]; pool[i]=pool[j]; pool[j]=tmp;
-    }
-    for(const c of pool){
-      if(keyCells.length>=3) break;
-      let ok=true;
-      for(const kc of keyCells){
-        if(Math.abs(c[0]-kc[0])+Math.abs(c[1]-kc[1])<keyMinGap){ok=false;break;}
-      }
-      if(!ok) continue;
-      keyCells.push(c); used.add(c.join(','));
-    }
-    if(keyCells.length<3){
-      for(const c of pool){
-        if(keyCells.length>=3) break;
-        const k=c.join(',');
-        if(used.has(k)) continue;
-        keyCells.push(c); used.add(k);
+    const reach=farthestFrom(start).dist;
+    const cand=floor.filter(c=>{const k=c.join(',');return !used.has(k)&&!reserved.has(k)&&reach.has(k)&&Math.abs(c[0]-playerCell[0])+Math.abs(c[1]-playerCell[1])>=4;});
+    const md=(a,b)=>Math.abs(a[0]-b[0])+Math.abs(a[1]-b[1]);
+    let picked=null;
+    for(let gap=Math.max(4,Math.floor(Math.min(cols,rows)*0.45));gap>=1&&!picked;gap--){
+      for(let t=0;t<40&&!picked;t++){
+        const sel=[];
+        const order=cand.slice();
+        for(let i=order.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const tmp=order[i];order[i]=order[j];order[j]=tmp;}
+        for(const c of order){
+          if(sel.every(q=>md(q,c)>=gap)) sel.push(c);
+          if(sel.length>=5) break;
+        }
+        if(sel.length>=5) picked=sel;
       }
     }
-    while(keyCells.length<3 && floor.length){
-      const c=floor[rng.int(0,floor.length-1)];
-      const k=c.join(',');
-      if(used.has(k)) continue;
-      keyCells.push(c); used.add(k);
+    if(!picked){
+      picked=cand.slice().sort(()=>Math.random()-.5).slice(0,5);
     }
-    let cursor=keyCells[keyCells.length-1]||playerCell;
-    const vaultCell=pickFar(cursor,used,Math.max(10,Math.floor(cols/2))); used.add(vaultCell.join(','));
-    const escapeCell=pickFar(vaultCell,used,Math.max(10,Math.floor(cols/2)));
+    picked.forEach(c=>{keyCells.push(c); used.add(c.join(','));});
+    const vaultCell=keyCells.splice(3,1)[0];
+    const escapeCell=keyCells.splice(3,1)[0];
 
     const p=toWorld(...playerCell), vault=toWorld(...vaultCell), escape=toWorld(...escapeCell);
     const keys=keyCells.map(c=>({...toWorld(...c),collected:false,cell:c}));
@@ -1008,7 +993,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     const wallRectCache=Array.from({length:rows},()=>Array(cols).fill(null));
     const baseTimer=Math.max(20,(perfectTime+bonus)-10+18+15);
     const stageSpeedMultiplier = tuning.guardSpeedMult ?? Math.pow(1.02, level.stage-1);
-    return {seed,rng,cell,cols,rows,ox,oy,grid,floorCells:floor.map(c=>c.slice()),keyCells:keyCells.map(c=>c.slice()),keys,vault,escape,guards,hazards,cameras,wallRectCache,backgroundCanvas:null,theme:tuning.theme,palette:STAGE_PALETTES[tuning.theme],guardSpeed:(88 + (level.level-1)*2)*stageSpeedMultiplier,wallsDiscovered:[],wallMemory:0,standstill:0,lightRadius:0,perfectTime,timer:Math.max(20,(baseTimer*tuning.timeMultiplier)-10)+10,radarPulses:[],crumbs:[],vaultOpen:false,vaultOpened:false,escapeArmed:false,lockdown:false,spawned:true,explosionFlash:0,lastPlayerMoving:false,alarmUntil:0,alarmTarget:null,objectiveFlash:0,musicBeat:0,timerRunning:false};
+    return {seed,rng,cell,cols,rows,ox,oy,grid,floorCells:floor.map(c=>c.slice()),keyCells:keyCells.map(c=>c.slice()),keys,vault,escape,guards,hazards,cameras,wallRectCache,backgroundCanvas:null,theme:tuning.theme,palette:STAGE_PALETTES[tuning.theme],guardSpeed:(88 + (level.level-1)*2)*stageSpeedMultiplier,wallsDiscovered:[],wallMemory:0,standstill:0,lightRadius:0,perfectTime,timer:Math.max(Math.max(20,(baseTimer*tuning.timeMultiplier)-10)+10, computePerfectTime(grid, playerCell, keyCells, vaultCell, escapeCell, cell)*cell/(150*1.08*1.30*0.95*0.95*0.96)*2.2+20),radarPulses:[],crumbs:[],vaultOpen:false,vaultOpened:false,escapeArmed:false,lockdown:false,spawned:true,explosionFlash:0,lastPlayerMoving:false,alarmUntil:0,alarmTarget:null,objectiveFlash:0,musicBeat:0,timerRunning:false};
   }
 
   function bfsDistancesFrom(grid, start){
@@ -1174,6 +1159,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       // The level-select JPEG is not needed once the round runs; release it to lower peak GPU memory.
       const stageBoardImg=document.getElementById('stageBoardImg');
       if(stageBoardImg && typeof stageBoardImg.removeAttribute==='function') stageBoardImg.removeAttribute('src');
+      warmThiefSprites();
       setState('PLAYING');
       try { setMainTitleGameplayVolume(); } catch (_) {}
       veil(false);
@@ -1201,7 +1187,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       const ng=g+1; st=Math.floor((ng-1)/7)+1; lv=((ng-1)%7)+1;
     }
     // Built only once the result screen is settled and idle (never during a transition).
-    setTimeout(()=>{ if(isGameOver && (gameState==='SUCCESS'||gameState==='FAILURE')) prebuildRound(st,lv); },1400);
+    setTimeout(()=>{ if(isGameOver && (gameState==='SUCCESS'||gameState==='FAILURE')) prebuildRound(st,lv); },140);
   }
 
   function composeRoundWorld(){
@@ -1224,6 +1210,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     nextWorld.player={x:spawnPos.x,y:spawnPos.y,vx:0,vy:0,r:15,lastDir:{x:1,y:0},wobble:0,opacity:1,keys:0};
     nextWorld.backgroundCanvas=null;
     nextWorld.timerStart=Math.max(1,Number(nextWorld.timer)||1);
+    warmMapChunks(nextWorld);
     return nextWorld;
   }
 
@@ -1240,7 +1227,6 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     resetRewardState();
     world.timerStart=Math.max(1,Number(world.timer)||1);
     initSpotHud();
-    screens.PLAYING?.classList.remove('rx-fail','rx-success');
     track('level_start',{level_name:levelName(),stage:level.stage,level:level.level});
     world.timerRunning=true;
     isMapFullyLoaded = Array.isArray(world.grid)&&world.grid.length>0&&world.player&&Number.isFinite(world.player.x)&&Number.isFinite(world.player.y)&&world.keys.length===3;
@@ -1513,7 +1499,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     try{
       const mv=getMoveInput(dt);
       const running=mv.mag>.08;
-      const maxSpeed=(running?150:110)*SPEED_BOOST;
+      const maxSpeed=(running?150:110)*SPEED_BOOST*1.02;
       const response=running?16:22;
       const follow=1-Math.exp(-response*Math.max(0.001,Math.min(0.05,dt)));
       const tx=mv.x*maxSpeed*mv.mag, ty=mv.y*maxSpeed*mv.mag;
@@ -1557,7 +1543,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       // Dynamic vision radius: when moving, expands smoothly up to 190px.
       // When stopped, collapses completely to 0 (bank is pitch black, only thief is visible).
       const IDLE_LIGHT_R = 0;    // completely collapses when stopped
-      const MOVE_LIGHT_R = 190 * 1.03;  // +3% wider thief vision
+      const MOVE_LIGHT_R = 190 * 1.03 * 1.04 * 1.05;  // +3% then +4% wider thief vision
       const lightTarget = actualSpeed > 15 ? MOVE_LIGHT_R : IDLE_LIGHT_R;
       const lightResponse = actualSpeed > 15 ? 7.5 : 5.0;
       world.lightRadius = (world.lightRadius ?? IDLE_LIGHT_R) + (lightTarget - (world.lightRadius ?? IDLE_LIGHT_R)) * (1 - Math.exp(-lightResponse * dt));
@@ -1678,7 +1664,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       const cameraAlarm=(world.alarmUntil||0)>nowSec;
       const insideSense=d<=SENSE_R && clearSight;
       const detectedNow=insideSense || visible || cameraAlarm;
-      if((insideSense||visible) && (world.continueGrace||0)<=0 && world.spotSeen) world.spotSeen.guard=true;
+      if((insideSense||visible) && d<=122 && (world.continueGrace||0)<=0 && world.spotSeen) world.spotSeen.guard=true;
 
       if(g.state!=='CHASE' && detectedNow){
         g.state='CHASE';
@@ -2220,12 +2206,6 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     pendingRewardPurpose=null; rewardAdInFlight=false;
     if(rewardAdTimer){clearTimeout(rewardAdTimer);rewardAdTimer=null;}
   }
-  function beginRoundEndFx(kind){
-    const gs=screens.PLAYING; if(!gs) return;
-    gs.classList.remove('rx-fail','rx-success');
-    void gs.offsetWidth;
-    gs.classList.add(kind==='fail'?'rx-fail':'rx-success');
-  }
   function fail(msg, purpose='caught'){
     if(!isMapFullyLoaded||isGameOver)return;
     isGameOver=true;
@@ -2243,11 +2223,9 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     if(failureTitle) failureTitle.textContent=spotted?'انكشف أمرك!':(purpose==='time'?'انتهى الوقت!':'اتمسكت!');
     if(failureText) failureText.textContent=spotted?'تم رصدك مرات كثيرة':(purpose==='time'?'انتهى الوقت قبل أن تهرب بالمسروقات.':'أحاط بك رجال الأمن وأُغلقت العملية.');
     // A short, deliberate beat on the frozen last frame (red vignette + punch), then a cross-fade to the result screen.
-    beginRoundEndFx('fail');
     recordResult(false);
     haptic([120,70,220]);
-    // No waiting beat: the failure screen starts fading in over the frozen frame right away while the red
-    // vignette (compositor-only) plays on the layer underneath. Nothing heavy runs in this frame.
+    // Straight to the failure screen (short fade over the frozen frame); nothing heavy runs in this frame.
     setState('FAILURE');
     fadeGameOverMusicIn();
     schedulePrebuild('fail');
@@ -2393,7 +2371,9 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     const id=((level.stage-1)*7)+level.level;
     let info=spotLimitCache[id];
     if(!info){ info=analyzeRoundDifficulty(w); spotLimitCache[id]=info; }
-    return {count:0,exposed:false,unseen:0,limits:{...info.limits},stars:3,lastSource:null,flash:0};
+    const bonus=1+(id<=2?1:0);
+    const lim={...info.limits}; lim.loseFirst+=bonus; lim.loseSecond+=bonus; lim.failAt+=bonus;
+    return {count:0,exposed:false,unseen:0,limits:lim,stars:3,lastSource:null,flash:0};
   }
 
   // ---- Stats, stars and haptics (all stored locally) ----
@@ -2556,15 +2536,14 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     markRoundCompleted(level.stage,level.level);
     const result=recordResult(true);
     // Keep the success SFX aligned with the result transition.
-    beginRoundEndFx('success');
     setTimeout(()=>{
       if(!isGameOver)return;
       setState('SUCCESS');
       showStars(result);
       haptic([40,40,90]);
       // The falling money and the music start after the cross-fade, so the transition frames stay light.
-      setTimeout(()=>{ if(gameState==='SUCCESS'){ startResultRain('money'); fadeResultMusicIn(); } },300);
       schedulePrebuild('success');
+      setTimeout(()=>{ if(gameState==='SUCCESS'){ startResultRain('money'); fadeResultMusicIn(); } },320);
     },1000);
   }
 
@@ -2575,6 +2554,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     // The physical canvas is fullscreen, while the gameplay scene is rendered
     // with exactly one scale factor on both axes. No image/object-fit stretching
     // is used anywhere in the gameplay render path.
+    ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';   // a canvas resize resets these to 'low'
     ctx.setTransform(viewport.dpr,0,0,viewport.dpr,0,0);
     ctx.fillStyle='#090a0c';
     ctx.fillRect(0,0,viewport.width,viewport.height);
@@ -2684,6 +2664,13 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       target.strokeStyle=`rgba(${p.line},.42)`; target.lineWidth=.8;
       for(let i=0;i<n;i++) target.stroke(chunks[i].lines);
     }
+  }
+  // Builds every chunk while the round is being created (hidden), so nothing is built mid-game when the camera moves.
+  function warmMapChunks(w){
+    const CH=6, chCols=Math.ceil(w.cols/CH), chRows=Math.ceil(w.rows/CH);
+    w._chunks=new Array(chCols*chRows);
+    for(let cy=0;cy<chRows;cy++) for(let cx=0;cx<chCols;cx++)
+      w._chunks[cy*chCols+cx]=buildMapChunk(w,cx*CH,cy*CH,Math.min(w.cols,cx*CH+CH),Math.min(w.rows,cy*CH+CH));
   }
   // Builds the static Path2D set (floor tiles + walls) for one chunk of cells; null when the chunk is empty.
   function buildMapChunk(w,x0,y0,x1,y1){
@@ -2988,7 +2975,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
 
   function drawLighting(now){
     const p=world.player;
-    const radius = Math.max(0, Math.min(190, world.lightRadius ?? 0));
+    const radius = Math.max(0, Math.min(190 * 1.04 * 1.05, world.lightRadius ?? 0));
 
     // ── Pure fog-of-war: ONLY the player's dynamic vision circle punches through darkness.
     // The bank is 100% pitch-black. When standing still, the circle completely collapses (radius=0).
@@ -3068,10 +3055,24 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     target.rotate(tilt);
 
     // Soft stealth floor shadow under the capsule base
-    target.fillStyle = 'rgba(0,0,0,0.38)';
-    target.beginPath();
-    target.ellipse(0, 0, 13, 5, 0, 0, Math.PI * 2);
-    target.fill();
+    {
+      // Dynamic shadow: stays glued to the floor (cancels bob/tilt), stretches and trails with movement,
+      // and shrinks/fades slightly while the body lifts on each step.
+      const mv = menuStatic ? 0 : Math.min(1, p.wobble || 0);
+      const vl = Math.hypot(p.vx || 0, p.vy || 0) || 1;
+      const ux = (p.vx || 0) / vl, uy = (p.vy || 0) / vl;
+      const lift = THIEF_WALK_BOB_AMPLITUDE ? Math.max(0, Math.min(1, -walkBob / THIEF_WALK_BOB_AMPLITUDE)) : 0;
+      const shrink = 1 - 0.14 * lift;
+      target.save();
+      target.rotate(-tilt);
+      target.translate(-ux * 2.2 * mv, -walkBob - uy * 1.2 * mv);
+      target.globalAlpha *= (1 - 0.22 * lift) * (1 - 0.12 * mv);
+      target.fillStyle = 'rgba(0,0,0,0.38)';
+      target.beginPath();
+      target.ellipse(0, 0, 13 * shrink * (1 + 0.3 * mv * Math.abs(ux)), 5 * shrink * (1 + 0.3 * mv * Math.abs(uy)), 0, 0, Math.PI * 2);
+      target.fill();
+      target.restore();
+    }
 
     // Select authentic directional thief pose matching the 4 uploaded poses:
     // LEFT, RIGHT, DOWN, UP (with loot variants after vault)
@@ -3091,8 +3092,8 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       const padTop = Math.max(0, img.naturalHeight - THIEF_SPRITE_CANVAS);
       const dy = -drawH * ((THIEF_SPRITE_ANCHOR_Y + padTop) / THIEF_SPRITE_CANVAS);
       const drawHImg = drawH * (img.naturalHeight / THIEF_SPRITE_CANVAS);
-      target.drawImage(sharpSprite(target,img,drawW,drawHImg), dx, dy, drawW, drawHImg);
-      if(hasLoot) drawLootBagFill(target, poseKey);
+      target.drawImage(sharpSprite(target,img,drawW,drawHImg,menuStatic?0:characterScale), dx, dy, drawW, drawHImg);
+      if(hasLoot) drawLootBagFill(target, poseKey, dx, dy, drawW/THIEF_SPRITE_CANVAS, drawH/THIEF_SPRITE_CANVAS);
 
       // Cohesive subtle blocky/square toon highlights matching the guard's blocky aesthetic on menu
       if(menuStatic){
@@ -3118,10 +3119,13 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
 
   // A direct 480px -> ~120px drawImage uses plain bilinear sampling and shimmers/aliases ("pixelated").
   // Pre-scale once per size with repeated halving, then blit ~1:1.
-  function sharpSprite(target,img,logicalW,logicalH){
+  function sharpSprite(target,img,logicalW,logicalH,charScale){
     try{
-      const m=target.getTransform(); const eff=Math.hypot(m.a,m.b);
-      const dw=Math.max(8,Math.round(logicalW*eff/4)*4), dh=Math.max(8,Math.round(logicalH*eff/4)*4);
+      // In-game the scale is a constant (no squash/stretch wobble) so every pose has exactly one cached size.
+      let eff;
+      if(target===ctx && charScale) eff=viewport.scale*viewport.dpr*charScale;
+      else { const m=target.getTransform(); eff=Math.hypot(m.a,m.b); }
+      const dw=Math.max(8,Math.round(logicalW*eff*1.5/2)*2), dh=Math.max(8,Math.round(logicalH*eff*1.5/2)*2);
       if(img.naturalWidth<=dw*1.34) return img;
       let perImg=thiefSpriteCache.get(img); if(!perImg){perImg=new Map();thiefSpriteCache.set(img,perImg);}
       const key=dw+'x'+dh; let out=perImg.get(key);
@@ -3135,29 +3139,94 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       }
       out=document.createElement('canvas'); out.width=dw; out.height=dh;
       const ox=out.getContext('2d'); ox.imageSmoothingEnabled=true; ox.imageSmoothingQuality='high'; ox.drawImage(cur,0,0,dw,dh);
+      try{ sharpenCanvas(ox,dw,dh); }catch(_){}
       perImg.set(key,out);
       return out;
     }catch(_){ return img; }
   }
 
-  function drawLootBagFill(target,poseKey){
-    const bagX = poseKey === 'left' ? 13 : -13;
-    const bagY = -19;
-    target.save();
-    target.fillStyle='rgba(255,221,74,.98)';
-    target.strokeStyle='rgba(135,77,13,.95)';
-    target.lineWidth=1.15;
-    for(const [x,y,r] of [[-7,2,3.5],[-3,0,3.8],[1,1,3.6],[5,0,3.4],[-5,-3,3.1],[0,-4,3.5],[4,-3,3.0]]){
-      target.beginPath();
-      target.arc(bagX+x,bagY+y,r,0,Math.PI*2);
-      target.fill();
-      target.stroke();
-      target.fillStyle='rgba(255,247,173,.92)';
-      target.beginPath();
-      target.arc(bagX+x-r*.28,bagY+y-r*.28,r*.28,0,Math.PI*2);
-      target.fill();
-      target.fillStyle='rgba(255,221,74,.98)';
+  // Gentle unsharp mask (RGB only, alpha untouched): restores the crisp edges that the downscale softens.
+  function sharpenCanvas(c2d,w,h){
+    const img=c2d.getImageData(0,0,w,h), d=img.data, src=new Uint8ClampedArray(d);
+    const amount=.55;
+    for(let y=1;y<h-1;y++) for(let x=1;x<w-1;x++){
+      const i=(y*w+x)*4;
+      if(src[i+3]<200) continue;
+      for(let ch=0;ch<3;ch++){
+        const blur=(src[i+ch]*4+src[i-4+ch]*2+src[i+4+ch]*2+src[i-w*4+ch]*2+src[i+w*4+ch]*2+src[i-w*4-4+ch]+src[i-w*4+4+ch]+src[i+w*4-4+ch]+src[i+w*4+4+ch])/16;
+        d[i+ch]=src[i+ch]+amount*(src[i+ch]-blur);
+      }
     }
+    c2d.putImageData(img,0,0);
+  }
+  // Pre-scales every pose once (before the round is shown) so no sprite is ever built while playing.
+  function warmThiefSprites(){
+    try{
+      for(const set of [thiefEmptyPoses,thiefLootPoses]){
+        const loot=set===thiefLootPoses;
+        const dW=loot?THIEF_SPRITE_DRAW_W_LOOT:THIEF_SPRITE_DRAW_W_EMPTY, dH=loot?THIEF_SPRITE_DRAW_H_LOOT:THIEF_SPRITE_DRAW_H_EMPTY;
+        for(const k of Object.keys(set||{})){
+          const img=set[k];
+          if(img && img.complete && img.naturalWidth>0) sharpSprite(ctx,img,dW,dH*(img.naturalHeight/THIEF_SPRITE_CANVAS),THIEF_CHARACTER_SCALE);
+        }
+      }
+    }catch(_){}
+  }
+
+  // Opening of the sack in each loot pose, in sprite-image pixels (480px art).
+  const LOOT_MOUTH={left:{x:404,y:248,rx:40,ry:26},right:{x:76,y:248,rx:40,ry:26},down:{x:86,y:250,rx:40,ry:26},up:{x:86,y:266,rx:36,ry:24}};
+  function lootCoin(target,x,y,r,rot,k){
+    const ry=r*k, th=Math.max(1.6,r*.13);
+    target.save();
+    target.translate(x,y); target.rotate(rot||0);
+    target.lineJoin='round';
+    // thin coin edge
+    target.fillStyle='#c27a08'; target.strokeStyle='#b8700a'; target.lineWidth=Math.max(1,r*.07);
+    target.beginPath(); target.ellipse(0,th,r,ry,0,0,Math.PI*2); target.fill(); target.stroke();
+    // face
+    const g=target.createRadialGradient(-r*.3,-ry*.35,r*.05,0,0,r*1.05);
+    g.addColorStop(0,'#fffbc4'); g.addColorStop(.35,'#ffe14d'); g.addColorStop(1,'#f2b218');
+    target.fillStyle=g; target.strokeStyle='#d98f0a'; target.lineWidth=Math.max(1.1,r*.075);
+    target.beginPath(); target.ellipse(0,0,r,ry,0,0,Math.PI*2); target.fill(); target.stroke();
+    // inner ring
+    target.strokeStyle='rgba(222,150,12,.8)'; target.lineWidth=Math.max(1,r*.06);
+    target.beginPath(); target.ellipse(0,0,r*.72,ry*.72,0,0,Math.PI*2); target.stroke();
+    // shine
+    target.strokeStyle='rgba(255,255,240,.95)'; target.lineWidth=Math.max(1.1,r*.09); target.lineCap='round';
+    target.beginPath(); target.ellipse(0,0,r*.86,ry*.86,0,Math.PI*1.1,Math.PI*1.4); target.stroke();
+    target.restore();
+  }
+  function lootSparkle(target,x,y,s){
+    target.save(); target.translate(x,y); target.fillStyle='rgba(255,255,255,.95)';
+    target.beginPath();
+    target.moveTo(0,-s); target.quadraticCurveTo(s*.14,-s*.14,s,0); target.quadraticCurveTo(s*.14,s*.14,0,s);
+    target.quadraticCurveTo(-s*.14,s*.14,-s,0); target.quadraticCurveTo(-s*.14,-s*.14,0,-s);
+    target.fill(); target.restore();
+  }
+  // Heap of shiny gold coins piled in many angles, mounded above the sack opening.
+  function drawLootBagFill(target,poseKey,dx,dy,kx,ky){
+    const m=LOOT_MOUTH[poseKey]||LOOT_MOUTH.down;
+    target.save();
+    target.translate(dx,dy); target.scale(kx,ky);
+    target.beginPath();
+    target.rect(m.x-160,m.y-220,320,220);
+    target.moveTo(m.x+m.rx,m.y); target.ellipse(m.x,m.y,m.rx,m.ry,0,0,Math.PI);
+    target.closePath(); target.clip();
+    // solid gold base so the heap has no gaps
+    target.fillStyle='#d99a0c';
+    target.beginPath(); target.ellipse(m.x,m.y-12,m.rx*1.2,m.ry*1.7,0,0,Math.PI*2); target.fill();
+    // [x, y, radius, flatness, rotation] back to front
+    const C=[
+      [-8,-34,15,.55,-.2],[12,-33,14,.7,.35],
+      [-26,-22,17,.62,.25],[-2,-24,17,.78,-.1],[24,-22,16,.6,-.35],
+      [-34,-8,16,.7,-.3],[-14,-11,18,.6,.15],[10,-10,18,.8,.1],[33,-8,16,.62,.4],
+      [-24,6,17,.6,.3],[-2,5,18,.72,-.2],[22,6,17,.58,-.1],[-8,15,15,.66,.2],[13,16,14,.7,-.25]
+    ];
+    const K=1.55*.95;
+    for(const c of C) lootCoin(target,m.x+c[0]*K,m.y+c[1]*K-6,c[2]*K,c[4],c[3]);
+    lootSparkle(target,m.x-46,m.y-58,10);
+    lootSparkle(target,m.x+46,m.y-42,8);
+    lootSparkle(target,m.x+8,m.y-72,7);
     target.restore();
   }
 
@@ -3172,11 +3241,12 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
 
   function drawGuardVisual(target,g,menuStatic=false){
     const isChasing = g.state === 'CHASE';
-    const dangerR = isChasing ? 146 : 122;
+    const dangerR = 122;   // constant size; it only changes colour
 
     if(!menuStatic){
       // ── FILLED DETECTION CIRCLE: GREEN IN PATROL, RED IN CHASE (SAME OPACITY) ──
-      const circleColor = isChasing ? '#ef4444' : '#22c55e';
+      const thiefInside = !!(world && world.player && Math.hypot(world.player.x-g.x, world.player.y-g.y) <= dangerR);
+      const circleColor = thiefInside ? '#ef4444' : '#22c55e';
 
       target.save();
       // Filled circle: identical smooth opacity
@@ -3187,19 +3257,19 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       target.fill();
 
       // Circle border
-      target.globalAlpha = isChasing ? 0.42 : 0.32;
+      target.globalAlpha = 0.32;
       target.strokeStyle = circleColor;
-      target.lineWidth = isChasing ? 2.5 : 2.0;
-      target.setLineDash(isChasing ? [10, 6] : [6, 8]);
+      target.lineWidth = 2.0;
+      target.setLineDash([6, 8]);
       target.beginPath();
       target.arc(g.x, g.y, dangerR, 0, Math.PI * 2);
       // soft glow = one wider, fainter pass (a canvas shadowBlur here cost a CPU blur per guard per frame)
       const strokeAlpha = target.globalAlpha;
       target.globalAlpha = strokeAlpha * .35;
-      target.lineWidth = (isChasing ? 2.5 : 2.0) + 6;
+      target.lineWidth = 2.0 + 6;
       target.stroke();
       target.globalAlpha = strokeAlpha;
-      target.lineWidth = isChasing ? 2.5 : 2.0;
+      target.lineWidth = 2.0;
       target.stroke();
       target.setLineDash([]);
 
@@ -4549,12 +4619,24 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   }
 
   let simAccumulator=0;
+  // Hold the whole UI back until the menu art is decoded, then show everything in the same frame
+  // (otherwise the CSS lights/beams appear first and the pictures pop in afterwards).
+  (function revealWhenReady(){
+    const root=document.documentElement; let done=false;
+    const reveal=()=>{ if(done) return; done=true; requestAnimationFrame(()=>requestAnimationFrame(()=>root.classList.remove('sr-boot'))); };
+    setTimeout(reveal,1800);
+    try{
+      const urls=['assets/menu-bank-bg.webp','assets/silent-raid-cartoon-hero.webp','assets/menu-bank-cartoon.svg'];
+      Promise.all(urls.map(u=>new Promise(res=>{ const i=new Image(); i.onload=()=>{ (i.decode?i.decode():Promise.resolve()).then(res,res); }; i.onerror=res; i.src=u; })))
+        .then(()=>document.fonts&&document.fonts.ready?document.fonts.ready:null).then(reveal,reveal);
+    }catch(_){ reveal(); }
+  })();
   const FIXED_DT=1/60;
   // On a slow device a long frame must not queue many extra simulation steps: that makes the next
   // frame even longer (a death spiral). Two steps max; the game then simply runs slightly slower.
   const MAX_CATCHUP_STEPS=2;
-  // Thief and guards share one speed multiplier (same ratio, so the chase balance is unchanged): 1.08 * 1.30.
-  const SPEED_BOOST=1.404;
+  // Thief and guards share one speed multiplier (same ratio, so the chase balance is unchanged): 1.08 * 1.30 * 0.95.
+  const SPEED_BOOST=1.08*1.30*0.95*0.95*0.96;
   // Keep simulation at a stable 60Hz while avoiding duplicate full Canvas renders
   // on 90/120Hz displays. This reduces GPU/CPU pressure without changing gameplay timing.
 

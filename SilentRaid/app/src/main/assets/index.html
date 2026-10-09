@@ -4,7 +4,7 @@
   Entry point: loads the visual system (style.css) and all gameplay/UI logic
   (script.js). Asset paths are relative to this file in ./assets/.
 -->
-<html lang="ar" dir="rtl">
+<html lang="ar" dir="rtl" class="sr-boot">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
@@ -291,7 +291,6 @@
         <div id="messageHud" class="message-hud"></div>
         <div id="joystick" class="joystick" aria-label="عصا الحركة"><div id="joystickKnob"></div></div>
       </div>
-      <div id="roundEndFx" aria-hidden="true"></div>
     </section>
 
     <section id="successScreen" class="screen result-screen rs2 rs2-win" aria-hidden="true">
@@ -388,7 +387,7 @@
             <div class="rs2-subrow"><i></i><p class="rs2-sub">أحاط بك رجال الأمن وأُغلقت العملية.</p><i></i></div>
             <div class="sr-fail-stars"><div id="failStars" class="sr-fail-row"></div><div id="failSpotCount" class="sr-fail-count"></div></div>
             <div class="rs2-actions">
-              <div class="reward-wrap"><div class="reward-aura" aria-hidden="true"></div><button id="rewardContinueBtn" class="secondary-btn rs2-btn rs2-gold" type="button"><span class="reward-shine" aria-hidden="true"></span><img class="reward-eye" src="assets/raid-eye.png" alt="" draggable="false"><span class="reward-label">شاهد وأكمل المداهمة</span></button></div>
+              <div class="reward-wrap"><div class="reward-aura" aria-hidden="true"></div><button id="rewardContinueBtn" class="secondary-btn rs2-btn rs2-gold" type="button"><span class="reward-shine" aria-hidden="true"></span><svg class="reward-eye reward-thief" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 4c-9 0-15 5-15 13v6h30v-6c0-8-6-13-15-13z" fill="#15151a"/><path d="M15 26h34v20c0 10-8 16-17 16S15 56 15 46z" fill="#f0c08a" stroke="#15151a" stroke-width="3"/><path d="M13 22h38v13H13z" fill="#15151a"/><ellipse cx="23" cy="29" rx="5" ry="3.4" fill="#fff"/><ellipse cx="41" cy="29" rx="5" ry="3.4" fill="#fff"/><circle cx="24" cy="29" r="2" fill="#15151a"/><circle cx="40" cy="29" r="2" fill="#15151a"/><path d="M12 52c6-5 12-6 20-6s14 1 20 6l-4 8H16z" fill="#15151a"/><path d="M22 47c4 3 16 3 20 0" fill="none" stroke="#15151a" stroke-width="3" stroke-linecap="round"/></svg><i class="reward-sep" aria-hidden="true"></i><span class="reward-label">شاهد وأكمل المداهمة</span></button></div>
               <button id="retryBtn" class="secondary-btn rs2-btn rs2-red" type="button"><svg class="rs2-ico" viewBox="0 0 48 48" aria-hidden="true"><g fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"><path d="M38 20a15 15 0 0 0-27-5"/><path d="M10 28a15 15 0 0 0 27 5"/></g><path d="M5 7l8 10 10-3z" fill="#fff"/><path d="M43 41l-8-10-10 3z" fill="#fff"/></svg><span class="rs2-btn-label">إعادة المحاولة</span></button>
               <button id="failureLevelsBtn" class="secondary-btn rs2-btn rs2-dark" type="button"><svg class="rs2-ico" viewBox="0 0 48 48" aria-hidden="true"><g fill="none" stroke="#fff" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round"><path d="M4 16l12-4 16 4 12-4v26l-12 4-16-4-12 4z"/><path d="M16 12v26M32 16v26"/><path d="M24 3c-5 0-8 3.600-8 8 0 5 8 11 8 11s8-6 8-11c0-4.400-3-8-8-8z" fill="#fff" stroke="#fff"/></g><circle cx="24" cy="11" r="2.800" fill="#1b1d25"/></svg><span class="rs2-btn-label">الأدوار</span></button>
             </div>
