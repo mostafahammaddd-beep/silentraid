@@ -8807,3 +8807,12 @@ body.gameplay-fullscreen #gameScreen #gameCanvas {
 #gameScreen.rx-fail #roundEndFx{animation:rxFx .2s ease-out forwards}
 #gameScreen.rx-fail .game-wrap{animation:rxHit .2s cubic-bezier(.2,.8,.25,1) forwards}
 @keyframes rxHit{0%{transform:scale(1) translate(0,0)}25%{transform:scale(1.03) translate(-3px,1px)}55%{transform:scale(1.04) translate(3px,-1px)}100%{transform:scale(1.045) translate(0,0)}}
+
+
+/* ---- level card pressed: the whole level-select screen vanishes instantly (nothing lingers under the fade) ---- */
+#levelSelectScreen.ls-launching,#levelSelectScreen.ls-launching.leaving,#levelSelectScreen.ls-launching *{
+  opacity:0 !important;visibility:hidden !important;transition:none !important;animation:none !important}
+
+/* ---- result screens: heavy decorative loops start only after the cross-fade has finished ---- */
+.rs2.entering .chain,.rs2.entering .rs2-bokeh i,.rs2.entering .rs2-bag-rays,.rs2.entering .rs2-bag-halo,
+.rs2.entering .rs2-siren-rays,.rs2.entering .rs2-siren-halo,.rs2.entering .rs2-glow,.rs2.entering .rs2-flash{animation-play-state:paused !important}

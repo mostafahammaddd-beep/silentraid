@@ -48,10 +48,8 @@
   const THIEF_CHARACTER_SCALE = THIEF_BASE_SCALE * 0.95 * 0.95; // thief: exactly 5% smaller again
 const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly 5% smaller
   const WALL_VERTICAL_SCALE = 1.09;
-  const WALL_INSET_RATIO = 0.10; // preserve the existing visual inset contract where applicable
   const THIEF_COLLISION_SKIN = 0.0; // no invisible collision buffer beyond the visible wall footprint
   const THIEF_MOVE_COLLISION_RADIUS = 2.0; // close wall contact so thief base reaches the wall cleanly
-  const BRICK_VISUAL_OUTWARD_RATIO = 0.0; // drawing and collision use the exact same wall footprint
   // Sprite layout shared by drawing and the thief AABB so the hitbox hugs the
   // visible silhouette. Values match drawPlayerVisual() exactly.
   const THIEF_SPRITE_CANVAS = 480;
@@ -65,7 +63,6 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   const THIEF_WALK_BOB_AMPLITUDE = 1.8;
   const THIEF_BODY_HALF_W = 13; // matches the floor-shadow capsule
   const THIEF_EDGE_PENETRATION = 0; // strict contact: no allowed overlap into bricks
-  const GRID_DIRECTIONS = [[1,0],[-1,0],[0,1],[0,-1]];
   let W = BASE_W;
   const ctx = canvas.getContext('2d', { alpha: false });
   ctx.imageSmoothingEnabled = true;
@@ -359,9 +356,6 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     document.querySelectorAll('.control-choice').forEach(btn=>btn.classList.toggle('selected', btn.dataset.layout===controlLayout));
   }
 
-  function hasSavedControlLayout(){
-    try { return localStorage.getItem(CONTROL_LAYOUT_KEY) === 'analog-left' || localStorage.getItem(CONTROL_LAYOUT_KEY) === 'analog-right'; } catch(_) { return false; }
-  }
 
   function applyJoystickMode(floating){
     joystickFloating=!!floating;
@@ -665,6 +659,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       el.style.removeProperty('visibility');
       el.style.removeProperty('pointer-events');
     });
+    if(next==='LEVELS') document.getElementById('levelSelectScreen')?.classList.remove('ls-launching');
     if(next==='PLAYING') screens.PLAYING?.classList.remove('rx-fail','rx-success');
     Object.values(screens).forEach(el=>{ if(el){ el.classList.remove('leaving','entering'); } });
     if(prevState!==next && screens[prevState] && screens[next]){
@@ -673,7 +668,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       screens[prevState].classList.add('leaving');
       screens[next].classList.add('entering');
       clearTimeout(setState._xf);
-      setState._xf=setTimeout(()=>{ Object.values(screens).forEach(el=>el&&el.classList.remove('leaving','entering')); },480);
+      setState._xf=setTimeout(()=>{ Object.values(screens).forEach(el=>el&&el.classList.remove('leaving','entering')); document.getElementById('levelSelectScreen')?.classList.remove('ls-launching'); },480);
     }
     if (next !== 'PLAYING') resetInput();
 
@@ -1046,68 +1041,6 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
 
   let currentViewingStage = 1;
 
-  function getStageEmblemSvg(stageId){
-    switch(stageId){
-      case 1: // Bronze shield with star
-        return `<svg viewBox="0 0 64 64" width="56" height="56" class="stage-emblem-svg">
-          <defs>
-            <linearGradient id="emblemB1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f5d496"/><stop offset="50%" stop-color="#b87a28"/><stop offset="100%" stop-color="#6e4210"/></linearGradient>
-            <filter id="emblemGlow1"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#e89d28" flood-opacity="0.6"/></filter>
-          </defs>
-          <path d="M32 4 L56 16 L52 46 L32 60 L12 46 L8 16 Z" fill="url(#emblemB1)" stroke="#ffe0a0" stroke-width="2" filter="url(#emblemGlow1)"/>
-          <path d="M32 10 L50 20 L47 43 L32 54 L17 43 L14 20 Z" fill="#24180c" stroke="rgba(255,220,160,0.4)" stroke-width="1.2"/>
-          <polygon points="32,18 36,27 46,27 38,33 41,43 32,37 23,43 26,33 18,27 28,27" fill="#fcdb88" stroke="#a06010" stroke-width="0.8"/>
-        </svg>`;
-      case 2: // Silver diamond shield
-        return `<svg viewBox="0 0 64 64" width="56" height="56" class="stage-emblem-svg">
-          <defs>
-            <linearGradient id="emblemS2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffffff"/><stop offset="50%" stop-color="#8baabf"/><stop offset="100%" stop-color="#3c556b"/></linearGradient>
-            <filter id="emblemGlow2"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#8ac8f0" flood-opacity="0.6"/></filter>
-          </defs>
-          <path d="M32 4 L58 20 L48 56 L32 60 L16 56 L6 20 Z" fill="url(#emblemS2)" stroke="#eef6fa" stroke-width="2" filter="url(#emblemGlow2)"/>
-          <path d="M32 10 L51 23 L43 51 L32 54 L21 51 L13 23 Z" fill="#0d1c28" stroke="rgba(200,230,255,0.45)" stroke-width="1.2"/>
-          <polygon points="32,15 39,32 32,48 25,32" fill="#d8edfa" stroke="#487898" stroke-width="1"/>
-          <circle cx="32" cy="32" r="4" fill="#ffffff" filter="url(#emblemGlow2)"/>
-        </svg>`;
-      case 3: // Gold imperial crown
-        return `<svg viewBox="0 0 64 64" width="56" height="56" class="stage-emblem-svg">
-          <defs>
-            <linearGradient id="emblemG3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fff2aa"/><stop offset="50%" stop-color="#f0b830"/><stop offset="100%" stop-color="#8a5a08"/></linearGradient>
-            <filter id="emblemGlow3"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#f5c830" flood-opacity="0.7"/></filter>
-          </defs>
-          <circle cx="32" cy="32" r="28" fill="#1f1406" stroke="url(#emblemG3)" stroke-width="2.5" filter="url(#emblemGlow3)"/>
-          <path d="M16 43 L16 26 L24 35 L32 18 L40 35 L48 26 L48 43 Z" fill="url(#emblemG3)" stroke="#fff8d0" stroke-width="1.5"/>
-          <rect x="16" y="44" width="32" height="6" rx="2" fill="#d49a18" stroke="#ffe890" stroke-width="1"/>
-          <circle cx="16" cy="24" r="2.8" fill="#fff5cc"/><circle cx="32" cy="16" r="3.2" fill="#fff5cc"/><circle cx="48" cy="24" r="2.8" fill="#fff5cc"/>
-        </svg>`;
-      case 4: // Diamond gemstone
-        return `<svg viewBox="0 0 64 64" width="56" height="56" class="stage-emblem-svg">
-          <defs>
-            <linearGradient id="emblemD4" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#b088ff"/><stop offset="50%" stop-color="#66b8ff"/><stop offset="100%" stop-color="#2a3080"/></linearGradient>
-            <filter id="emblemGlow4"><feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#8060ff" flood-opacity="0.8"/></filter>
-          </defs>
-          <circle cx="32" cy="32" r="28" fill="#0b0820" stroke="url(#emblemD4)" stroke-width="2.2" filter="url(#emblemGlow4)"/>
-          <polygon points="20,24 44,24 54,34 32,52 10,34" fill="url(#emblemD4)" stroke="#e0d0ff" stroke-width="1.5"/>
-          <polygon points="26,24 38,24 42,34 32,34 22,34" fill="rgba(255,255,255,0.35)"/>
-          <polygon points="32,34 42,34 32,50" fill="rgba(255,255,255,0.18)"/>
-          <polygon points="32,34 22,34 32,50" fill="rgba(0,0,0,0.2)"/>
-        </svg>`;
-      case 5: // Mythic winged fire crown
-      default:
-        return `<svg viewBox="0 0 64 64" width="56" height="56" class="stage-emblem-svg">
-          <defs>
-            <linearGradient id="emblemM5" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ff9040"/><stop offset="45%" stop-color="#e83020"/><stop offset="100%" stop-color="#550808"/></linearGradient>
-            <filter id="emblemGlow5"><feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#ff3818" flood-opacity="0.85"/></filter>
-          </defs>
-          <circle cx="32" cy="32" r="28" fill="#180402" stroke="url(#emblemM5)" stroke-width="2.5" filter="url(#emblemGlow5)"/>
-          <path d="M6 34 C12 24, 22 28, 26 36 C22 38, 14 39, 6 34 Z" fill="#d02810"/>
-          <path d="M58 34 C52 24, 42 28, 38 36 C42 38, 50 39, 58 34 Z" fill="#d02810"/>
-          <path d="M19 43 L20 28 L27 35 L32 21 L37 35 L44 28 L45 43 Z" fill="url(#emblemM5)" stroke="#ffc060" stroke-width="1.4"/>
-          <rect x="18" y="44" width="28" height="6" rx="2" fill="#801008" stroke="#ffa050" stroke-width="1"/>
-          <circle cx="32" cy="20" r="3" fill="#ffee80"/>
-        </svg>`;
-    }
-  }
 
   function openLevelSelect(){
     try{ ensureAudio(); }catch(_){}
@@ -1221,6 +1154,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     isGameOver=false;
     isMapFullyLoaded=false;
     // Establish the logical world aspect BEFORE generating the maze (true widescreen round).
+    document.getElementById('levelSelectScreen')?.classList.add('ls-launching');
     prepareLogicalGameplayWidth();
     let pre=null;
     if(prebuiltRound && prebuiltRound.stage===level.stage && prebuiltRound.level===level.level && prebuiltRound.W===W && prebuiltRound.H===H) pre=prebuiltRound.world;
@@ -1233,6 +1167,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
         console.error('Silent Raid level setup error', err);
         isMapFullyLoaded=false;
         veil(false);
+        document.getElementById('levelSelectScreen')?.classList.remove('ls-launching');
         showMessage('تعذر تجهيز الدور. أعد المحاولة.');
         return;
       }
@@ -1265,7 +1200,8 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       const g=((st-1)*7)+lv; if(g>=35) return;
       const ng=g+1; st=Math.floor((ng-1)/7)+1; lv=((ng-1)%7)+1;
     }
-    setTimeout(()=>{ if(isGameOver && gameState==='PLAYING') prebuildRound(st,lv); },90);
+    // Built only once the result screen is settled and idle (never during a transition).
+    setTimeout(()=>{ if(isGameOver && (gameState==='SUCCESS'||gameState==='FAILURE')) prebuildRound(st,lv); },1400);
   }
 
   function composeRoundWorld(){
@@ -1386,13 +1322,6 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     if(world.wallRectCache) world.wallRectCache[gy][gx]=rect;
     return rect;
   }
-  function wallRectForCell(gx,gy){
-    const rect=baseWallRectForCell(gx,gy);
-    if(!rect || !world) return rect;
-    // The rendered brick must occupy exactly the same rectangle used by collision.
-    // No hidden visual/collision overhang: the player can see precisely what blocks passage.
-    return {x:rect.x, y:rect.y, w:rect.w, h:rect.h};
-  }
 
   function circleHitsRect(cx,cy,r,rect){
     const qx=Math.max(rect.x,Math.min(cx,rect.x+rect.w));
@@ -1411,37 +1340,9 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     ];
   }
 
-  function traceWallPath(target,rect){
-    const points=wallPolygon(rect);
-    target.beginPath();
-    target.moveTo(points[0].x,points[0].y);
-    for(let i=1;i<points.length;i++)target.lineTo(points[i].x,points[i].y);
-    target.closePath();
-  }
 
-  function polygonAxes(poly){
-    const axes=[];
-    for(let i=0;i<poly.length;i++){
-      const a=poly[i],b=poly[(i+1)%poly.length],dx=b.x-a.x,dy=b.y-a.y;
-      const length=Math.hypot(dx,dy)||1;
-      axes.push({x:-dy/length,y:dx/length});
-    }
-    return axes;
-  }
 
-  function projectPolygon(poly,axis){
-    let min=Infinity,max=-Infinity;
-    for(const p of poly){const value=p.x*axis.x+p.y*axis.y;min=Math.min(min,value);max=Math.max(max,value);}
-    return {min,max};
-  }
 
-  function polygonsOverlap(a,b){
-    for(const axis of [...polygonAxes(a),...polygonAxes(b)]){
-      const pa=projectPolygon(a,axis),pb=projectPolygon(b,axis);
-      if(pa.max<=pb.min||pb.max<=pa.min)return false;
-    }
-    return true;
-  }
 
   function canStandAt(x,y,r){
     if(!world) return false;
@@ -1466,13 +1367,15 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     // Use the larger loot frame so both empty and carrying poses stay inside.
     return {w:THIEF_SPRITE_DRAW_W_LOOT,h:THIEF_SPRITE_DRAW_H_LOOT};
   }
+  let thiefExtentsMemo=null;
   function thiefCollisionExtents(){
+    if(thiefExtentsMemo) return thiefExtentsMemo;
     const {w,h}=thiefSpriteDrawSize();
     const dy=-h*(THIEF_SPRITE_ANCHOR_Y/THIEF_SPRITE_CANVAS);
     const top=THIEF_RENDER_Y_OFFSET-THIEF_WALK_BOB_AMPLITUDE+dy;
     const bottom=THIEF_RENDER_Y_OFFSET+dy+h*(THIEF_SPRITE_FEET_Y/THIEF_SPRITE_CANVAS);
     const halfW=THIEF_BODY_HALF_W-THIEF_EDGE_PENETRATION;
-    return {halfW,top,bottom};
+    return (thiefExtentsMemo={halfW,top,bottom});
   }
   function thiefBodyRectAt(x,y){
     const e=thiefCollisionExtents();
@@ -1497,12 +1400,18 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     return {x,y};
   }
 
+  // Axis-aligned body vs the bevelled wall octagon. A rectangle and an octagon only have 6 distinct separating
+  // axes (x, y and the two diagonals of the bevels), so the test is done directly without building polygons.
+  // (The generic SAT used to allocate ~100 objects per call, several times per frame -> constant GC pauses.)
   function rectsOverlap(a,b){
-    const body=[
-      {x:a.left,y:a.top},{x:a.right,y:a.top},
-      {x:a.right,y:a.bottom},{x:a.left,y:a.bottom}
-    ];
-    return polygonsOverlap(body,wallPolygon(b));
+    const bx=b.x,by=b.y,bw=b.w,bh=b.h;
+    if(a.right<=bx || bx+bw<=a.left || a.bottom<=by || by+bh<=a.top) return false;
+    const bev=Math.max(0,Math.min(b.bevel||0,bw*.25,bh*.25));
+    if(bev>0){
+      if(a.right+a.bottom<=bx+by+bev || bx+bw+by+bh-bev<=a.left+a.top) return false;      // diagonal (1,1)
+      if(a.right-a.top<=bx-by-bh+bev || bx+bw-by-bev<=a.left-a.bottom) return false;      // diagonal (1,-1)
+    }
+    return true;
   }
 
   function entityTouchesRect(entity, rect) {
@@ -1545,7 +1454,6 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   function canGuardStandAt(x,y,r){
     return canStandAt(x,y,r);
   }
-  function collideCircleWalls(x,y,r){ return canStandAt(x,y,r)?{x,y}:{x:x,y:y}; }
   function canvasToGrid(x,y){return {x:Math.floor((x-world.ox)/world.cell),y:Math.floor((y-world.oy)/world.cell)}}
   function isFloor(gx,gy){return gx>=0&&gy>=0&&gx<world.cols&&gy<world.rows&&world.grid[gy][gx]===0}
 
@@ -2185,14 +2093,6 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
 
   // Kept as a safe fallback for any older call site. It is intentionally random
   // over the whole connected floor set and never reads the player.
-  function choosePatrolCell(base){
-    const pool=world?.floorCells?.length?world.floorCells: [base];
-    return pool[Math.floor(world.rng.next()*pool.length)] || base;
-  }
-  function collideEntityWalls(x,y,r,g){
-    const g1=canvasToGrid(x-r,y),g2=canvasToGrid(x+r,y),g3=canvasToGrid(x,y-r),g4=canvasToGrid(x,y+r);
-    if([g1,g2,g3,g4].some(q=>!isFloor(q.x,q.y))) return {x:g.x,y:g.y}; return {x,y};
-  }
   function hasLineOfSight(a,b){
     const d=dist(a,b);
     if(d<1) return true;
@@ -2204,12 +2104,6 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
       if(!isFloor(g.x,g.y)) return false;
     }
     return true;
-  }
-  function collectNearbyWalls(){
-    const p=world.player, out=[]; const r=170; const minX=Math.max(0,Math.floor((p.x-r-world.ox)/world.cell)),maxX=Math.min(world.cols-1,Math.ceil((p.x+r-world.ox)/world.cell));
-    const minY=Math.max(0,Math.floor((p.y-r-world.oy)/world.cell)),maxY=Math.min(world.rows-1,Math.ceil((p.y+r-world.oy)/world.cell));
-    for(let y=minY;y<=maxY;y++)for(let x=minX;x<=maxX;x++)if(world.grid[y][x]===1)out.push({x:world.ox+x*world.cell,y:world.oy+y*world.cell,w:world.cell,h:world.cell});
-    return out;
   }
 
   function updateHazards(dt,speed){
@@ -2350,14 +2244,13 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     if(failureText) failureText.textContent=spotted?'تم رصدك مرات كثيرة':(purpose==='time'?'انتهى الوقت قبل أن تهرب بالمسروقات.':'أحاط بك رجال الأمن وأُغلقت العملية.');
     // A short, deliberate beat on the frozen last frame (red vignette + punch), then a cross-fade to the result screen.
     beginRoundEndFx('fail');
-    schedulePrebuild('fail');
     recordResult(false);
     haptic([120,70,220]);
-    setTimeout(()=>{
-      if(!isGameOver || gameState!=='PLAYING') return;
-      setState('FAILURE');
-      fadeGameOverMusicIn();
-    },200);
+    // No waiting beat: the failure screen starts fading in over the frozen frame right away while the red
+    // vignette (compositor-only) plays on the layer underneath. Nothing heavy runs in this frame.
+    setState('FAILURE');
+    fadeGameOverMusicIn();
+    schedulePrebuild('fail');
   }
 
   function requestRewardContinue(){
@@ -2664,14 +2557,14 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     const result=recordResult(true);
     // Keep the success SFX aligned with the result transition.
     beginRoundEndFx('success');
-    schedulePrebuild('success');
     setTimeout(()=>{
       if(!isGameOver)return;
       setState('SUCCESS');
       showStars(result);
       haptic([40,40,90]);
-      startResultRain('money');
-      fadeResultMusicIn();
+      // The falling money and the music start after the cross-fade, so the transition frames stay light.
+      setTimeout(()=>{ if(gameState==='SUCCESS'){ startResultRain('money'); fadeResultMusicIn(); } },300);
+      schedulePrebuild('success');
     },1000);
   }
 
@@ -2724,7 +2617,7 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   // This preserves the existing floor/wall artwork exactly while removing the
   // persistent full-map offscreen canvas (the highest-risk GPU allocation on
   // older Android WebViews).
-  const bgToneBuf=[[],[],[],[],[],[],[]], bgWallBuf=[];
+  const bgWallBuf=[];
   function drawWorldBackground(target,w,bounds){
     const c=w.cell, bw=w.cols*c, bh=w.rows*c, p=w.palette;
     const minCol=Math.max(0,Math.floor((bounds.left-w.ox)/c)-1);
@@ -2741,50 +2634,75 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     floorGrad.addColorStop(0,p.floorA); floorGrad.addColorStop(.35,p.floorB); floorGrad.addColorStop(1,p.floorC);
     target.fillStyle=floorGrad; target.fillRect(w.ox,w.oy,bw,bh);
 
-    // Floor stone tiling. Same pixels as the per-cell version, but issued as a
-    // handful of batched fills/strokes instead of ~4 canvas calls per tile.
-    const toneCells=bgToneBuf;
-    for(let t=0;t<7;t++) toneCells[t].length=0;
-    let floorCount=0;
-    for(let y=minRow;y<=maxRow;y++) for(let x=minCol;x<=maxCol;x++) if(w.grid[y][x]===0){
-      toneCells[((x*17+y*31+w.seed)>>>0)%7].push(x,y); floorCount++;
+    // Floor tiles + walls. Geometry is static per world: every 6x6-cell chunk gets its Path2D objects built once
+    // (the first time it is on screen) and each frame only replays the visible chunks. Previously thousands of
+    // per-tile / per-wall path calls and many short-lived objects were rebuilt every single frame.
+    const CH=6, chCols=Math.ceil(w.cols/CH), chRows=Math.ceil(w.rows/CH);
+    if(!w._chunks) w._chunks=new Array(chCols*chRows);
+    const cMin=Math.floor(minCol/CH), cMax=Math.floor(maxCol/CH), rMin=Math.floor(minRow/CH), rMax=Math.floor(maxRow/CH);
+    const chunks=bgWallBuf; chunks.length=0;
+    for(let cy=rMin;cy<=rMax;cy++) for(let cx=cMin;cx<=cMax;cx++){
+      const key=cy*chCols+cx;
+      let ch=w._chunks[key];
+      if(ch===undefined) ch=w._chunks[key]=buildMapChunk(w,cx*CH,cy*CH,Math.min(w.cols,cx*CH+CH),Math.min(w.rows,cy*CH+CH));
+      if(ch) chunks.push(ch);
     }
-    if(floorCount){
+    if(chunks.length){
+      const styles=w._toneStyles||(w._toneStyles=[0,1,2,3,4,5,6].map(i=>`rgba(${p.glow},${0.03+i*.005})`));
+      const nAll=chunks.length;
       for(let t=0;t<7;t++){
-        const cells=toneCells[t]; if(!cells.length) continue;
-        target.fillStyle=(w._toneStyles||(w._toneStyles=[0,1,2,3,4,5,6].map(i=>`rgba(${p.glow},${0.03+i*.005})`)))[t];
-        target.beginPath();
-        for(let i=0;i<cells.length;i+=2) target.rect(w.ox+cells[i]*c+1,w.oy+cells[i+1]*c+1,c-2,c-2);
-        target.fill();
+        target.fillStyle=styles[t];
+        for(let i=0;i<nAll;i++){ const tp=chunks[i].tones[t]; if(tp) target.fill(tp); }
       }
       target.strokeStyle=`rgba(${p.line},.55)`; target.lineWidth=.8;
-      target.beginPath();
-      for(let t=0;t<7;t++){
-        const cells=toneCells[t];
-        for(let i=0;i<cells.length;i+=2) target.rect(w.ox+cells[i]*c+.4,w.oy+cells[i+1]*c+.4,c-.8,c-.8);
-      }
-      target.stroke();
+      for(let i=0;i<nAll;i++) if(chunks[i].tileLines) target.stroke(chunks[i].tileLines);
       target.fillStyle=`rgba(${p.glow},.08)`;
-      target.beginPath();
-      for(let t=0;t<7;t++){
-        const cells=toneCells[t];
-        for(let i=0;i<cells.length;i+=2){
-          const fx=w.ox+cells[i]*c, fy=w.oy+cells[i+1]*c;
-          for(let q=0;q<2;q++) target.rect(fx+((t*13+q*11)%Math.max(2,c-2))+1,fy+((t*5+q*7)%Math.max(2,c-2))+1,1,1);
-        }
-      }
-      target.fill();
+      for(let i=0;i<nAll;i++) if(chunks[i].dots) target.fill(chunks[i].dots);
     }
-
-    // Walls. Geometry is static per world, so it is computed once per wall and
-    // cached; every pass below is one batched canvas operation (previously each
-    // wall issued its own blurred shadow fill, clip, fills and strokes).
-    if(!w._wallShapes) w._wallShapes=new Array(w.rows*w.cols);
-    const wallList=bgWallBuf; wallList.length=0;
-    for(let y=minRow;y<=maxRow;y++) for(let x=minCol;x<=maxCol;x++) if(w.grid[y][x]===1){
-      const idx=y*w.cols+x;
-      let sh=w._wallShapes[idx];
-      if(!sh){
+    // keep only chunks that contain walls for the wall passes
+    for(let i=chunks.length-1;i>=0;i--) if(!chunks[i].wall) chunks.splice(i,1);
+    if(chunks.length){
+      const n=chunks.length;
+      // 1) offset shadow + fill (cheap offset copy instead of a blurred shadow)
+      target.save();
+      target.translate(1.5,2); target.fillStyle='rgba(0,0,0,.30)';
+      for(let i=0;i<n;i++) target.fill(chunks[i].wall);
+      target.restore();
+      target.fillStyle=p.wall;
+      for(let i=0;i<n;i++) target.fill(chunks[i].wall);
+      // 2) bottom shade + top highlight, clipped to the wall outlines
+      for(let i=0;i<n;i++){
+        target.save();
+        target.clip(chunks[i].wall);
+        target.fillStyle=p.wallShade; target.fill(chunks[i].shade);
+        target.fillStyle=p.wallTop; target.fill(chunks[i].top);
+        target.restore();
+      }
+      // 3) outlines and inner edge highlights
+      target.strokeStyle=`rgba(${p.glow},.50)`; target.lineWidth=1;
+      for(let i=0;i<n;i++) target.stroke(chunks[i].wall);
+      target.strokeStyle=`rgba(${p.line},.42)`; target.lineWidth=.8;
+      for(let i=0;i<n;i++) target.stroke(chunks[i].lines);
+    }
+  }
+  // Builds the static Path2D set (floor tiles + walls) for one chunk of cells; null when the chunk is empty.
+  function buildMapChunk(w,x0,y0,x1,y1){
+    const c=w.cell;
+    const ch={tones:[null,null,null,null,null,null,null],tileLines:null,dots:null,wall:null,shade:null,top:null,lines:null};
+    let any=false;
+    for(let y=y0;y<y1;y++) for(let x=x0;x<x1;x++){
+      const v=w.grid[y][x];
+      if(v===0){
+        any=true;
+        const t=((x*17+y*31+w.seed)>>>0)%7;
+        const fx=w.ox+x*c, fy=w.oy+y*c;
+        (ch.tones[t]||(ch.tones[t]=new Path2D())).rect(fx+1,fy+1,c-2,c-2);
+        (ch.tileLines||(ch.tileLines=new Path2D())).rect(fx+.4,fy+.4,c-.8,c-.8);
+        const dots=ch.dots||(ch.dots=new Path2D());
+        for(let q=0;q<2;q++) dots.rect(fx+((t*13+q*11)%Math.max(2,c-2))+1,fy+((t*5+q*7)%Math.max(2,c-2))+1,1,1);
+      }else if(v===1){
+        any=true;
+        if(!ch.wall){ ch.wall=new Path2D(); ch.shade=new Path2D(); ch.top=new Path2D(); ch.lines=new Path2D(); }
         const wx=w.ox+x*c,wy=w.oy+y*c;
         const basePad = c * ((1 - BRICK_SIZE_RATIO) / 2);
         const extraPad = c * (CORRIDOR_EXTRA_CLEARANCE_RATIO / 2);
@@ -2794,64 +2712,24 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
         const bottomOpen = w.grid[y+1]?.[x] !== 1;
         const left   = leftOpen ? basePad + extraPad : 0;
         const right  = rightOpen ? basePad + extraPad : 0;
-        const top    = topOpen ? basePad + extraPad : 0;
+        const topPad = topOpen ? basePad + extraPad : 0;
         const bottom = bottomOpen ? basePad + extraPad : 0;
-        const rw=Math.max(1,c-left-right), rh=Math.max(1,c-top-bottom);
+        const rw=Math.max(1,c-left-right), rh=Math.max(1,c-topPad-bottom);
         const verticalExtra=(c*(WALL_VERTICAL_SCALE-1))/2;
-        const rx=wx+left, ry=wy+top-verticalExtra, rhFinal=rh+verticalExtra*2;
-        const shape={x:rx,y:ry,w:rw,h:rhFinal,bevel:1};
-        sh={pts:wallPolygon(shape),rx,ry,rw,rh:rhFinal,bevel:1,
-            lineLeft:w.grid[y]?.[x-1]===0, lineTop:w.grid[y-1]?.[x]===0};
-        w._wallShapes[idx]=sh;
+        const rx=wx+left, ry=wy+topPad-verticalExtra, rhFinal=rh+verticalExtra*2;
+        const pts=wallPolygon({x:rx,y:ry,w:rw,h:rhFinal,bevel:1});
+        ch.wall.moveTo(pts[0].x,pts[0].y);
+        for(let k=1;k<pts.length;k++) ch.wall.lineTo(pts[k].x,pts[k].y);
+        ch.wall.closePath();
+        ch.shade.rect(rx,ry+Math.max(0,rhFinal-5),rw,Math.min(4,rhFinal));
+        ch.top.rect(rx,ry,rw,Math.min(3,rhFinal));
+        if(w.grid[y]?.[x-1]===0){ ch.lines.moveTo(rx+.5,ry+1); ch.lines.lineTo(rx+.5,ry+rhFinal-1); }
+        if(w.grid[y-1]?.[x]===0){ ch.lines.moveTo(rx+1,ry+.5); ch.lines.lineTo(rx+rw-1,ry+.5); }
       }
-      wallList.push(sh);
     }
-    if(wallList.length){
-      const addWalls=()=>{
-        target.beginPath();
-        for(let i=0;i<wallList.length;i++){
-          const pts=wallList[i].pts;
-          target.moveTo(pts[0].x,pts[0].y);
-          for(let k=1;k<pts.length;k++) target.lineTo(pts[k].x,pts[k].y);
-          target.closePath();
-        }
-      };
-      // 1) one blurred shadow + fill for every wall at once
-      target.save();
-      target.translate(1.5,2); target.fillStyle='rgba(0,0,0,.30)'; addWalls(); target.fill();
-      target.restore();
-      target.fillStyle=p.wall; addWalls(); target.fill();
-      // 2) bottom shade + top highlight, clipped to the wall outlines
-      target.save();
-      addWalls(); target.clip();
-      target.fillStyle=p.wallShade; target.beginPath();
-      for(let i=0;i<wallList.length;i++){const s=wallList[i]; target.rect(s.rx,s.ry+Math.max(0,s.rh-5),s.rw,Math.min(4,s.rh));}
-      target.fill();
-      target.fillStyle=p.wallTop; target.beginPath();
-      for(let i=0;i<wallList.length;i++){const s=wallList[i]; target.rect(s.rx,s.ry,s.rw,Math.min(3,s.rh));}
-      target.fill();
-      target.restore();
-      // 3) outlines and inner edge highlights
-      target.strokeStyle=`rgba(${p.glow},.50)`; target.lineWidth=1; addWalls(); target.stroke();
-      target.strokeStyle=`rgba(${p.line},.42)`; target.lineWidth=.8; target.beginPath();
-      for(let i=0;i<wallList.length;i++){
-        const s=wallList[i];
-        if(s.lineLeft){ target.moveTo(s.rx+.5,s.ry+s.bevel); target.lineTo(s.rx+.5,s.ry+s.rh-s.bevel); }
-        if(s.lineTop){ target.moveTo(s.rx+s.bevel,s.ry+.5); target.lineTo(s.rx+s.rw-s.bevel,s.ry+.5); }
-      }
-      target.stroke();
-    }
+    return any?ch:null;
   }
 
-  // Retained for the visual test harness only. Production gameplay deliberately
-  // does not call it, so it never keeps a second large Canvas texture alive.
-  function buildBackgroundLayer(w){
-    const layer=document.createElement('canvas'); layer.width=Math.max(1,Math.ceil(W)); layer.height=H;
-    const cctx=layer.getContext('2d',{alpha:false});
-    drawWorldBackground(cctx,w,{left:0,top:0,right:W,bottom:H,width:W,height:H});
-    return layer;
-  }
-  function isFloorFor(w,gx,gy){return gx>=0&&gy>=0&&gx<w.cols&&gy<w.rows&&w.grid[gy][gx]===0;}
   function drawWorld(now){
     drawWorldBackground(ctx,world,visibleWorldBounds());
     drawBankDecor();
@@ -3666,11 +3544,6 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
     return true;
   }
 
-  function setNodeGroupLevel(group, level){
-    for(const n of group){
-      try { n.gain.gain.setTargetAtTime(n.gain.gain.value/Math.max(.0001, level||1), audio.ac.currentTime, .01); } catch(_){}
-    }
-  }
 
   function applyMusicMix(ambient, chase){
     // Node base levels are restored through explicit target values.
@@ -4680,19 +4553,16 @@ const ROUND_CHARACTER_SCALE = THIEF_BASE_SCALE * 1.03 * 0.95; // guards: exactly
   // On a slow device a long frame must not queue many extra simulation steps: that makes the next
   // frame even longer (a death spiral). Two steps max; the game then simply runs slightly slower.
   const MAX_CATCHUP_STEPS=2;
-  // Thief and guards both move 8% faster than before (same ratio, so the chase balance is unchanged).
-  const SPEED_BOOST=1.08;
+  // Thief and guards share one speed multiplier (same ratio, so the chase balance is unchanged): 1.08 * 1.30.
+  const SPEED_BOOST=1.404;
   // Keep simulation at a stable 60Hz while avoiding duplicate full Canvas renders
   // on 90/120Hz displays. This reduces GPU/CPU pressure without changing gameplay timing.
-  const TARGET_RENDER_MS=1000/60;
-  let lastPresentedFrame=0;
 
   function startGameRenderLoop(){
     if(gameLoopActive) return;
     gameLoopActive=true;
     perfWarm=60; perfAcc=0; perfN=0;
     simAccumulator=0;
-    lastPresentedFrame=0;
     lastFrame=performance.now();
     snapshotPrev();
     gameFrameRaf=requestAnimationFrame(frame);
